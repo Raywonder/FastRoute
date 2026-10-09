@@ -56,6 +56,16 @@ void StopUpdateChecks();
 // Runs the check the settings ask for on startup, if they ask for one.
 void CheckForUpdatesOnStartup(HWND owner);
 
+// The two decisions, exposed so they can be checked without a network.
+//
+// ReleaseField pulls "**Version:** 0.6" and "**Commit:** abc" out of a release
+// body, in the shapes the build workflow writes them. CompareVersions orders
+// two version strings the way a person reads them, so 0.10 is newer than 0.6
+// rather than older as a plain string comparison would have it. Negative when
+// the first is older, zero when they match, positive when it is newer.
+std::wstring ReleaseField(const std::wstring& body, const wchar_t* label);
+int CompareVersions(const std::wstring& a, const std::wstring& b);
+
 // What this build is, for the About dialog and for comparing against a
 // release. The commit is empty when the build did not know its own.
 std::wstring RunningVersion();

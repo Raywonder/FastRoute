@@ -230,6 +230,9 @@
 #define IDC_SET_REC_LABEL       1213
 #define IDC_SET_REC_FOLDER      1214
 #define IDC_SET_REC_BROWSE      1215
+#define IDC_SET_UPDATE_LABEL    1216
+#define IDC_SET_UPDATE          1217
+#define IDC_SET_UPDATE_SILENT   1218
 
 // Where a session or block hotkey works: everywhere, or only in FastRoute
 #define IDC_HK_SCOPE_GLOBAL     1216
@@ -348,6 +351,7 @@
 #define IDM_SESSION_STOP        40006
 #define IDM_APP_EXIT            40007
 #define IDM_HELP_ABOUT          40008
+#define IDM_HELP_UPDATE         40036
 #define IDM_SESSION_TOGGLE      40009
 #define IDM_SESSION_AUTORUN     40010
 #define IDM_HELP_ERRORS         40011

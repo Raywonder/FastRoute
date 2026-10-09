@@ -1,5 +1,6 @@
 #include "app.h"
 #include "audio/net.h"
+#include "updater.h"
 #include "audio/netcodec.h"
 #include "plugins/plugins.h"
 #include <thread>
@@ -3258,6 +3259,20 @@ static INT_PTR CALLBACK SettingsDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp
         SyncSettingsFields(dlg);
         SetDlgItemTextW(dlg, IDC_SET_REC_FOLDER, g_store.settings.recFolder.c_str());
 
+        for (int i = 0; i < kUpdateCheckCount; ++i)
+            SendDlgItemMessageW(dlg, IDC_SET_UPDATE, CB_ADDSTRING, 0,
+                                (LPARAM)UpdateCheckName(i));
+        {
+            int when = g_store.settings.updateCheck;
+            if (when < 0 || when >= kUpdateCheckCount) when = UC_NEVER;
+            SendDlgItemMessageW(dlg, IDC_SET_UPDATE, CB_SETCURSEL, (WPARAM)when, 0);
+            CheckDlgButton(dlg, IDC_SET_UPDATE_SILENT,
+                           g_store.settings.updateSilent ? BST_CHECKED
+                                                         : BST_UNCHECKED);
+            // Nothing to be quiet about when it is never going to look.
+            EnableWindow(GetDlgItem(dlg, IDC_SET_UPDATE_SILENT), when != UC_NEVER);
+        }
+
         // An empty list is not helpful when the answer is the same two folders
         // on almost every machine, so those are offered to begin with.
         std::vector<std::wstring> paths = g_store.settings.pluginPaths;
@@ -3302,6 +3317,18 @@ static INT_PTR CALLBACK SettingsDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp
 
         case IDC_HK_KEY:
             if (HIWORD(wp) == EN_CHANGE) SyncSettingsFields(dlg);
+            return TRUE;
+
+        // The checkbox follows the interval, so that "never, quietly"
+        // cannot be set.
+        case IDC_SET_UPDATE:
+            if (HIWORD(wp) == CBN_SELCHANGE)
+            {
+                const int when = (int)SendDlgItemMessageW(dlg, IDC_SET_UPDATE,
+                                                          CB_GETCURSEL, 0, 0);
+                EnableWindow(GetDlgItem(dlg, IDC_SET_UPDATE_SILENT),
+                             when != UC_NEVER);
+            }
             return TRUE;
 
         case IDC_PLUG_ADD:
@@ -3386,6 +3413,13 @@ static INT_PTR CALLBACK SettingsDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp
             }
 
             AppSettings previous = g_store.settings;
+            {
+                const int when = (int)SendDlgItemMessageW(dlg, IDC_SET_UPDATE,
+                                                          CB_GETCURSEL, 0, 0);
+                if (when >= 0) g_store.settings.updateCheck = when;
+                g_store.settings.updateSilent =
+                    IsDlgButtonChecked(dlg, IDC_SET_UPDATE_SILENT) == BST_CHECKED;
+            }
             g_store.settings.showHide = want;
             g_store.settings.pluginPaths = ReadPluginPaths(dlg);
             g_store.settings.recFolder = rec;

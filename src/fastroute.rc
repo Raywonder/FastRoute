@@ -86,6 +86,7 @@ BEGIN
     POPUP "&Help"
     BEGIN
         MENUITEM "&Error Log...",                IDM_HELP_ERRORS
+        MENUITEM "Check for &Updates...",        IDM_HELP_UPDATE
         MENUITEM "&About FastRoute",             IDM_HELP_ABOUT
     END
 END
@@ -1013,7 +1014,7 @@ END
 /////////////////////////////////////////////////////////////////////////////
 // Settings
 
-IDD_SETTINGS DIALOGEX 0, 0, 280, 300
+IDD_SETTINGS DIALOGEX 0, 0, 280, 356
 STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "FastRoute Settings"
 FONT 9, "Segoe UI", 400, 0, 0x1
@@ -1046,8 +1047,15 @@ BEGIN
                     IDC_SET_REC_LABEL, 7, 242, 266, 18
     EDITTEXT        IDC_SET_REC_FOLDER, 7, 262, 200, 14, ES_AUTOHSCROLL | WS_TABSTOP
     PUSHBUTTON      "Brows&e...", IDC_SET_REC_BROWSE, 213, 261, 60, 16
-    DEFPUSHBUTTON   "OK",     IDOK,     166, 280, 50, 16
-    PUSHBUTTON      "Cancel", IDCANCEL, 223, 280, 50, 16
+    LTEXT           "&Look for a new version of FastRoute:", IDC_SET_UPDATE_LABEL,
+                    7, 284, 266, 9
+    COMBOBOX        IDC_SET_UPDATE, 7, 296, 200, 100,
+                    CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "Install it &quietly, without asking first",
+                    IDC_SET_UPDATE_SILENT, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 314, 266, 12
+    DEFPUSHBUTTON   "OK",     IDOK,     166, 334, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 223, 334, 50, 16
 END
 
 /////////////////////////////////////////////////////////////////////////////

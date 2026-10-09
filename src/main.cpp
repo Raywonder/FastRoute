@@ -1,4 +1,5 @@
 #include "app.h"
+#include "updater.h"
 #include <map>
 #include <memory>
 
@@ -171,6 +172,12 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, LPWSTR, int)
 
     RunStartupSessions();
 
+    // Looking for a new build, if the settings ask for one. Both of these are
+    // no-ops when they are set to never, and both do their waiting on threads
+    // of their own.
+    CheckForUpdatesOnStartup(g_mainDlg);
+    StartUpdateChecks(g_mainDlg);
+
     MSG msg;
     while (GetMessageW(&msg, nullptr, 0, 0) > 0)
     {
@@ -190,6 +197,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, LPWSTR, int)
         DispatchMessageW(&msg);
     }
 
+    StopUpdateChecks();
     StopAllSessions();
     CoUninitialize();
     return (int)msg.wParam;

@@ -135,7 +135,9 @@ struct Http
 
 // Pulls "**Version:** 0.6" and "**Commit:** abc123" out of the release body.
 // The continuous build writes both, in those shapes, for exactly this.
-std::wstring FieldFrom(const std::wstring& body, const wchar_t* label)
+}  // namespace
+
+std::wstring ReleaseField(const std::wstring& body, const wchar_t* label)
 {
     const std::wstring tag = std::wstring(L"**") + label + L":**";
     size_t at = body.find(tag);
@@ -171,8 +173,6 @@ int CompareVersions(const std::wstring& a, const std::wstring& b)
         if (i >= a.size() && j >= b.size()) return 0;
     }
 }
-
-}  // namespace
 
 std::wstring RunningVersion() { return FASTROUTE_VERSION_W; }
 
@@ -225,8 +225,8 @@ UpdateInfo CheckForUpdates()
 
     const std::wstring notes = doc.AsString(L"body");
     info.notes = notes;
-    info.version = FieldFrom(notes, L"Version");
-    info.commit = FieldFrom(notes, L"Commit");
+    info.version = ReleaseField(notes, L"Version");
+    info.commit = ReleaseField(notes, L"Commit");
 
     // The portable zip, which is the only asset there is. Chosen by shape
     // rather than by position so that adding another one later cannot make

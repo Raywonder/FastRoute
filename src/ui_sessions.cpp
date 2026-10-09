@@ -1,4 +1,5 @@
 #include "app.h"
+#include "updater.h"
 #include <map>
 
 static const UINT_PTR kSchedulerTimer = 1;
@@ -498,6 +499,9 @@ INT_PTR CALLBACK MainDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
         case IDM_SESSION_RENAME:  CmdRename(dlg); return TRUE;
         case IDM_SESSION_DELETE:  CmdDelete(dlg); return TRUE;
         case IDM_HELP_ERRORS:     ShowErrorLogDialog(dlg); return TRUE;
+        // Asked for by hand, so it reports either way rather than only when
+        // there is something to report.
+        case IDM_HELP_UPDATE:     ShowCheckForUpdates(dlg, false); return TRUE;
         case IDM_APP_SETTINGS:    ShowSettingsDialog(dlg); return TRUE;
         case IDM_APP_HIDE:        HideToTray(dlg); return TRUE;
         case IDM_TRAY_SHOW:       ShowFromTray(dlg); return TRUE;

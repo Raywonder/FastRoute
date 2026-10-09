@@ -817,6 +817,49 @@ to keep.
 A Net Send block clocks nothing, the same as a recorder, so a session whose only
 output is a Net Send block still gets a device opened purely to drive the graph.
 
+## Builds, and updating itself
+
+Every push to `main` builds on GitHub and replaces one release, tagged
+`latest`, with the result. There is only ever one of those, so the download
+link never goes stale. The workflow is `.github/workflows/build.yml`.
+
+It also checks the binary for imports Windows 7 does not have. That check was
+being done by hand until now, and it is the one mistake that stops FastRoute
+starting at all on its own stated floor - not with an error, just nothing
+happening when somebody double-clicks it.
+
+The version lives in `src/version.h` and nowhere else. The VERSIONINFO
+resource, `dist.ps1`'s default zip name and the release label all read it from
+there, so a release cannot be labelled with one number and built from another.
+CMake also bakes the short commit in, because two builds of 0.6 are otherwise
+indistinguishable and between releases that is every build.
+
+### Updating
+
+**Help > Check for Updates** asks now. **Settings** has how often to ask by
+itself - never, when FastRoute starts, hourly or daily - and whether to get on
+with it without asking first.
+
+Off by default. A program that phones home unasked should be asked first, and
+Settings is where to ask.
+
+What it compares is the commit where it can and the version where it cannot.
+The commit is exact; the version is the fallback for a build that was made
+without git to ask, and it is compared the way a person reads it, so 0.10 is
+newer than 0.6 rather than older as a plain string comparison would have it.
+
+Applying one is a batch file, because an exe cannot overwrite itself while it
+is running: FastRoute writes the script, asks itself to close, and the script
+waits, unpacks the zip over the folder, starts the new copy and deletes itself.
+Nothing in the zip is a settings file - it holds the exe and the documentation
+and nothing else - so sessions, settings and recordings are left where they
+are. Nothing is installed and nothing in the registry is touched, which is the
+same reason the whole folder can live on a memory stick.
+
+A scheduled check that fails says nothing and writes to the error log instead.
+A laptop that was asleep, or a network that is not up yet, is the usual reason,
+and a box about it would be worse than useless.
+
 ## Block actions, and the buffer
 
 Everything else a block can be told is a **parameter**: a value written into
@@ -1772,6 +1815,21 @@ any of six conditions, including a sender genuinely running 500 parts per
 million fast and another the same amount slow - far more than two real crystals
 differ by - and in those two the buffer is checked to hold its depth, since a
 correction gentle enough to be inaudible still has to work.
+
+The updater is checked in three parts. The two decisions that can be wrong
+without anybody noticing - reading the version and commit out of a release
+body, and ordering two version strings - are checked without a network, against
+the literal text the workflow writes rather than a convenient sample: a parser
+that disagrees with it finds no version and then silently never offers an
+update again. Then the check itself is run against the real release, and the
+comparison is checked in both directions by compiling the harness as though it
+were built from the release's own commit and then from a different one. Then
+the download is run against the real asset and the file on disk is checked to
+be exactly the size the release says, and to begin "PK" rather than being an
+error page.
+
+Applying an update is deliberately not checked, because doing so would replace
+the copy of FastRoute on the machine running the check.
 
 A receiver asking a sender for the audio is checked over a real socket, which
 is the shape every link between two machines takes: a sender is started having
