@@ -12,6 +12,20 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 #    the process from starting at all.
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
+# Which commit this is, when there is one to find. The updater compares
+# commits rather than version strings where it can: two builds of 0.6 are
+# otherwise indistinguishable, and between releases that is every build.
+find_package(Git QUIET)
+set(FASTROUTE_COMMIT "")
+if (GIT_FOUND AND EXISTS "${CMAKE_SOURCE_DIR}/.git")
+    execute_process(
+        COMMAND "${GIT_EXECUTABLE}" rev-parse --short=12 HEAD
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        OUTPUT_VARIABLE FASTROUTE_COMMIT
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET)
+endif()
+
 add_subdirectory(third_party)
 
 add_executable(FastRoute WIN32
@@ -52,6 +66,10 @@ add_executable(FastRoute WIN32
 
 target_include_directories(FastRoute PRIVATE src)
 target_compile_definitions(FastRoute PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
+if (FASTROUTE_COMMIT)
+    target_compile_definitions(FastRoute PRIVATE
+        FASTROUTE_BUILD_COMMIT="${FASTROUTE_COMMIT}")
+endif()
 # mmdevapi is deliberately absent: its only use here is
 # ActivateAudioInterfaceAsync, which Windows 7 does not export.
 target_link_libraries(FastRoute PRIVATE

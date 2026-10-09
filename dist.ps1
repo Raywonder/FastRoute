@@ -14,8 +14,8 @@
     Release (default) or Debug.
 
 .PARAMETER Version
-    Version string used in the zip name. Defaults to the current date, which is
-    honest about what it is: a build from a given day, not a tagged release.
+    Version string used in the zip name. Defaults to whatever src\version.h
+    says, so a zip is named for the build it contains without being told.
 
 .PARAMETER SkipBuild
     Package whatever is already built instead of building first.
@@ -28,7 +28,7 @@
 param(
     [ValidateSet('Release', 'Debug')]
     [string]$Configuration = 'Release',
-    [string]$Version = (Get-Date -Format 'yyyy-MM-dd'),
+    [string]$Version = '',
     [switch]$SkipBuild
 )
 
@@ -36,6 +36,15 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $root  = $PSScriptRoot
+
+# The version lives in src\version.h and nowhere else, so a release cannot be
+# labelled with one number and built from another.
+if (-not $Version) {
+    $vh = Join-Path $PSScriptRoot 'src\version.h'
+    $m = Select-String -Path $vh -Pattern '#define FASTROUTE_VERSION\s+"([^"]+)"'
+    if (-not $m) { throw "No FASTROUTE_VERSION in $vh." }
+    $Version = $m.Matches[0].Groups[1].Value
+}
 $build = Join-Path $root 'build'
 $dist  = Join-Path $root 'dist'
 $arch  = 'x64'

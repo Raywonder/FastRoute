@@ -1,8 +1,48 @@
 #include <windows.h>
 #include <commctrl.h>
 #include "resource.h"
+#include "version.h"
 
 LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+
+/////////////////////////////////////////////////////////////////////////////
+// Version
+//
+// Without this the file properties show a blank version, which is no help to
+// anybody trying to work out which build they are running - and with six
+// releases out, that is a question people ask.
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION    FASTROUTE_VERSION_COMMA
+ PRODUCTVERSION FASTROUTE_VERSION_COMMA
+ FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
+#ifdef _DEBUG
+ FILEFLAGS      VS_FF_DEBUG
+#else
+ FILEFLAGS      0x0L
+#endif
+ FILEOS         VOS_NT_WINDOWS32
+ FILETYPE       VFT_APP
+ FILESUBTYPE    VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "FileDescription", "FastRoute"
+            VALUE "FileVersion",     FASTROUTE_VERSION
+            VALUE "InternalName",    "FastRoute"
+            VALUE "LegalCopyright",  "Licensed under the GNU GPL version 3"
+            VALUE "OriginalFilename","FastRoute.exe"
+            VALUE "ProductName",     "FastRoute"
+            VALUE "ProductVersion",  FASTROUTE_VERSION
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
 
 /////////////////////////////////////////////////////////////////////////////
 // Icon
