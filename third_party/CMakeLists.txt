@@ -246,6 +246,47 @@ if (MSVC AND TARGET FLAC)
     target_compile_options(FLAC PRIVATE /W0)
 endif()
 
+# --- ASIO ------------------------------------------------------------------
+# For the ASIO Input and ASIO Output blocks.
+#
+# Steinberg dual licensed the ASIO SDK on 15 October 2025: either their own
+# proprietary agreement, or GPL version 3. FastRoute takes the GPLv3 option,
+# which is why FastRoute itself is GPLv3 - see LICENSE at the top of the tree.
+# Under that option the SDK can be fetched and pinned like everything else
+# here, and the ASIO branding is optional rather than required.
+#
+# Pinned to a commit rather than a tag because there is no tag to pin to.
+# Steinberg publish the SDK through sdk.steinberg.net rather than through a
+# repository of their own; this is the mirror the relicensing was published
+# alongside, and a commit hash is exact whoever is hosting it.
+#
+# Only the host side is built. The driver side of the SDK is for writing an
+# ASIO driver, which this does not do: FastRoute is a host.
+FetchContent_Declare(asiosdk
+    GIT_REPOSITORY https://github.com/audiosdk/asio.git
+    GIT_TAG        496a0765b8bb9c26f764f22f9a9712a937177db2
+    GIT_SHALLOW    FALSE)
+FetchContent_GetProperties(asiosdk)
+if (NOT asiosdk_POPULATED)
+    FetchContent_Populate(asiosdk)
+endif()
+
+add_library(asiosdk STATIC
+    ${asiosdk_SOURCE_DIR}/common/asio.cpp
+    ${asiosdk_SOURCE_DIR}/host/asiodrivers.cpp
+    ${asiosdk_SOURCE_DIR}/host/pc/asiolist.cpp)
+target_include_directories(asiosdk PUBLIC
+    ${asiosdk_SOURCE_DIR}/common
+    ${asiosdk_SOURCE_DIR}/host
+    ${asiosdk_SOURCE_DIR}/host/pc)
+if (MSVC)
+    # The SDK is from 2003 and uses a good deal that is deprecated now. None of
+    # it is ours to fix, and patching a dependency in place fights FetchContent
+    # every time it re-populates.
+    target_compile_options(asiosdk PRIVATE /W0)
+    target_compile_definitions(asiosdk PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
+
 # ---------------------------------------------------------------------------
 # Plugin formats: CLAP and VST3
 #

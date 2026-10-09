@@ -70,14 +70,23 @@ jobs:
                       'GetThreadDescription|GetCurrentThreadStackLimits|' +
                       'FromApp|PrefetchVirtualMemory|GetOverlappedResultEx|' +
                       'api-ms-win-'
-          $found = dumpbin /imports build\Release\FastRoute.exe |
-                   Select-String -Pattern $win8Only
+          $dump = dumpbin /imports build\Release\FastRoute.exe 2>&1 | Out-String
+          if ($LASTEXITCODE -ne 0 -or $dump -notmatch 'KERNEL32.dll') {
+            Write-Host "dumpbin did not produce a usable import list, so"
+            Write-Host "nothing was actually checked. Treating that as a"
+            Write-Host "failure: a check that cannot run must not pass."
+            Write-Host $dump
+            exit 1
+          }
+          $found = $dump -split "`r?`n" | Select-String -Pattern $win8Only
           if ($found) {
             Write-Host "FastRoute.exe imports functions Windows 7 does not have:"
             $found | ForEach-Object { Write-Host $_.Line.Trim() }
             exit 1
           }
-          Write-Host "No Windows 8 or later imports."
+          $dlls = ([regex]::Matches($dump, '(?m)^\s{4}(\S+\.dll)') |
+                   ForEach-Object { $_.Groups[1].Value }) -join ', '
+          Write-Host "No Windows 8 or later imports. Needs: $dlls"
 
       - name: Read the version
         id: version

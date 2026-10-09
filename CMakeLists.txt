@@ -42,6 +42,7 @@ add_executable(FastRoute WIN32
     src/scheduler.cpp
     src/updater.cpp
     src/audio/devices.cpp
+    src/audio/asiodev.cpp
     src/audio/normalise.cpp
     src/audio/buffer.cpp
     src/audio/capture.cpp
@@ -77,7 +78,7 @@ target_link_libraries(FastRoute PRIVATE
     comctl32 oleacc ole32 oleaut32 uuid propsys shlwapi avrt user32 gdi32 advapi32 shell32
     mfplat mfuuid mfreadwrite mf ole32
     delayimp
-    rnnoise speexdsp signalsmith_stretch FLAC
+    rnnoise speexdsp signalsmith_stretch FLAC asiosdk
     clap_headers vst3_pluginterfaces
     vorbis vorbisfile vorbisenc ogg opus opusfile
     winhttp ws2_32 iphlpapi)
