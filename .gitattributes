@@ -1,0 +1,7 @@
+# The tree is CRLF throughout, since it is a Windows program edited with
+# Windows tools. Normalising on the way in keeps the history from churning
+# when somebody checks it out somewhere else.
+* text=auto
+
+# And the icon is not text at all.
+*.ico binary

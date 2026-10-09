@@ -1,0 +1,65 @@
+FastRoute changelog
+
+
+0.6 (unreleased)
+
+Fixed
+  - The pitch wandered on a poor link. Four things in the ring that buffers every capture were behind it, and they compounded: a glitch was counted once per dropped frame rather than once per overflow, so a single burst arriving after a stall counted in the hundreds and latched the drift correction on at its five-glitch threshold; the correction was then allowed five percent of pitch shift, nearly a semitone, with a gain that let one packet of buffer depth ask for one and a half percent, so it rode the depth and wandered; the drift estimate was biased upward because a read that found the ring empty was left out of it while the audio arriving just after was counted in; and there was only one buffer of headroom above the working depth, so the catch-up burst after a stall overflowed and audio was discarded frame by frame. The correction is now clamped to a quarter of one percent, about four cents, with a gain fifty times gentler; there are two buffers of headroom; and the other two are fixed outright. On a link stalling for 120 ms every two seconds: 3709 glitches and 14.85 cents of deviation before, 10 glitches and 0.00 cents after.
+  - Net Receive concealed a lost packet by dropping it rather than replacing it, which made the stream shorter than the sender sent. The ring in front of the mixer reads that as the sender's clock running slow, engages its drift resampler, and resamples the whole session - which was heard as the pitch wandering about, worse the more the network lost. Gaps are now filled to exactly the length that went missing, worked out from the sender's own frame counter.
+  - Net Receive threw away any packet that arrived out of order, having already concealed for it, so one reordering cost two packets instead of none. Packets are now held in a jitter buffer and played in sequence order, so a late or overtaken packet is used. A duplicate is dropped rather than played twice.
+  - A missing packet was given up on the instant a gap was noticed. It is now waited for until half the buffer has passed, which is most of what "late" means on a real link.
+  - The Opus encoder was asked to carry redundancy for error correction and the decoder never asked for it back, so the bitrate was spent and the benefit thrown away. The receiver now asks the packet after a gap to rebuild the one that went missing.
+  - The VBAN path had the same dropped-concealment fault, by way of a cleared buffer immediately after filling it.
+
+Added
+  - Net Receive and Net Send blocks: audio over the local network, either between copies of FastRoute or to and from anything that speaks VB-Audio's VBAN protocol (VoiceMeeter, VBAN Receptor on a phone, and so on).
+  - A FastRoute sender announces itself on a multicast group, so a Net Receive block lists what it has heard by name and nobody has to know an address. A VBAN host is found by being asked, which FastRoute now does, and answers, so it turns up in the same list.
+  - Senders can broadcast to a group that any number of receivers can join, or serve one receiver at a time across subnets, a VPN or the internet. In that second case the receiver does the asking: start the sender, then name that machine in a Net Receive block on the other one, and the sender sends to whoever asked. Nothing has to be forwarded on the receiving side, because the asking is outbound from there.
+  - PCM at 16 bit, 24 bit and 32 bit float, FLAC and Opus. A VBAN stream is 16 bit PCM, which is what VBAN carries.
+  - Opus settings on a dialog of their own: how much packet loss to protect against, complexity, whether it is carrying speech or music, constant or variable bitrate, and whether to send almost nothing while the input is silent.
+  - Net Receive reports what the network is doing to it - frames lost as a percentage, packets out of order, packets too late to use, and the longest a packet had to be held, which is the figure to size the buffer from.
+  - Adjustable packet length, buffer depth, Opus bitrate and multicast hop limit. The hop limit applies only to a group: a packet sent to one named host keeps the system's own TTL, since one hop would not get it past the first router. Sending to a group only works on the local network - no internet provider carries multicast - so a remote machine has to be reached by sending to one host. The packet length control says what it really settled on: a packet has to fit one datagram, so 10 ms of 16 bit stereo at 48 kHz does not fit and is cut to 7.3.
+
+
+0.5 (released 7 September 2026)
+
+Added
+  - Pitch Shifter block, built on Signalsmith Stretch: semitones, cents, and a quality setting that chooses how much delay to spend (120, 60 or 30 ms). At no shift it costs nothing and delays nothing. It does not preserve formants, so a voice shifted up goes up whole.
+
+
+0.4 (released 30 August 2026)
+
+Added
+  - Noise Gate: lookahead, 0 to 50 ms, so the gate is already open when the sound arrives instead of still opening. Costs its own length in latency. Existing sessions load with none; new gate blocks start at 5 ms.
+
+Changed
+  - Sliders: Up and Page Up now raise the value and Down and Page Down lower it, instead of the other way round. Left, Right, Home and End are unchanged.
+  - Sliders report their parameter rather than their position. A trackbar reports where its thumb is as a percentage of its range, so the parametric frequency slider read as "68" at 250 Hz and a pan hard left read as "0". Every slider is now annotated with the value written beside it, so a screen reader says "250 Hz", "hard left", "-6 dB", and a plugin's sliders say whatever the plugin calls the value.
+
+
+0.3 (released 27 August 2026)
+
+Added
+  - Channel Mixer: volume and pan per channel, with a reset back to the defaults.
+  - Apply button (Alt+A) on every block parameter dialog: pushes the change into the running session without closing.
+
+Changed
+  - RNNoise runs at any sample rate. The bus is converted to 48 kHz around the model and back, instead of the block refusing to start below it. Costs about 5 ms extra at 44.1 kHz; nothing changes at 48 kHz.
+  - Access keys that two controls in the same dialog were sharing now differ, in the Recorder, Buffer and Settings dialogs.
+
+
+0.2 (released 24 August 2026)
+
+Added
+  - Normaliser: target level, lookahead, maximum boost, release.
+  - Clipping Monitor: beeps on clipping, does not alter the audio.
+  - Session and block hotkeys can be global or window scoped.
+  - Hotkey keys are named in a text field rather than picked from a list, so arrows, Home, End, the keypad and the media keys can all be bound.
+  - Ctrl+Shift+O opens a session's recording folder.
+  - A default folder in Settings for new Recorder blocks.
+  - Block actions: blocks that have actions can have a hotkey per action.
+  - Buffer block: keeps the last so many seconds, with rewind, fast forward, jump to live and save.
+
+Fixed
+  - Reordering blocks could terminate the process, when the move promoted a second output block to master.
+  - System audio with exclusions captured applications playing to other output devices. It is now scoped to the block's own device.

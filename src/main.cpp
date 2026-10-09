@@ -1,0 +1,202 @@
+#include "app.h"
+#include <map>
+#include <memory>
+
+#pragma comment(linker, "\"/manifestdependency:type='win32' \
+name='Microsoft.Windows.Common-Controls' version='6.0.0.0' \
+processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
+
+HINSTANCE g_inst = nullptr;
+HWND      g_mainDlg = nullptr;
+
+// ---------------------------------------------------------------------------
+// Running engines, keyed by the stable session id
+// ---------------------------------------------------------------------------
+
+static std::map<int, std::unique_ptr<Engine>> g_engines;
+
+bool SessionRunning(int sessionId)
+{
+    auto it = g_engines.find(sessionId);
+    return it != g_engines.end() && it->second->Running();
+}
+
+static bool StartSessionInto(int sessionId, std::wstring* err)
+{
+    Session* s = g_store.ById(sessionId);
+    if (!s)
+    {
+        if (err) *err = L"That session no longer exists.";
+        return false;
+    }
+
+    StopSession(sessionId);
+
+    std::unique_ptr<Engine> e(new Engine());
+    if (!e->Start(*s, err)) return false;
+
+    g_engines[sessionId] = std::move(e);
+    NotifySessionStateChanged(sessionId);
+    return true;
+}
+
+bool StartSession(HWND owner, int sessionId)
+{
+    std::wstring err;
+    if (StartSessionInto(sessionId, &err)) return true;
+    ErrorBox(owner, err.empty() ? L"The session could not be started." : err);
+    return false;
+}
+
+bool StartSessionSilently(int sessionId, std::wstring* err)
+{
+    return StartSessionInto(sessionId, err);
+}
+
+void StopSession(int sessionId)
+{
+    auto it = g_engines.find(sessionId);
+    if (it == g_engines.end()) return;
+    it->second->Stop();
+    g_engines.erase(it);
+    NotifySessionStateChanged(sessionId);
+}
+
+void StopAllSessions()
+{
+    for (auto& kv : g_engines) kv.second->Stop();
+    g_engines.clear();
+}
+
+bool SessionStatus(int sessionId, Engine::Status* st)
+{
+    auto it = g_engines.find(sessionId);
+    if (it == g_engines.end()) return false;
+    it->second->GetStatus(st);
+    return true;
+}
+
+void ApplyLiveEditQuiet(int sessionId)
+{
+    auto it = g_engines.find(sessionId);
+    Session* s = g_store.ById(sessionId);
+    if (it == g_engines.end() || !s) return;
+
+    std::wstring err;
+    bool intact = true;
+    if (it->second->ApplySession(*s, &err, &intact)) return;
+
+    if (!intact) StopSession(sessionId);
+    LogError(err.empty() ? L"A change could not be applied to a running session."
+                         : err);
+}
+
+bool PerformBlockAction(int sessionId, int blockIndex, int action)
+{
+    auto it = g_engines.find(sessionId);
+    if (it == g_engines.end()) return false;
+    return it->second->PerformAction(blockIndex, action);
+}
+
+bool ApplyLiveEdit(HWND owner, int sessionId)
+{
+    auto it = g_engines.find(sessionId);
+    Session* s = g_store.ById(sessionId);
+    if (it == g_engines.end() || !s) return true;      // not running, nothing to push
+
+    std::wstring err;
+    bool intact = true;
+    if (it->second->ApplySession(*s, &err, &intact)) return true;
+
+    // If the rebuild failed before touching anything, the session is still
+    // playing the previous graph; otherwise it is in no fit state to continue.
+    if (!intact) StopSession(sessionId);
+    ErrorBox(owner, err.empty() ? L"The change could not be applied." : err);
+    return false;
+}
+
+void RunStartupSessions()
+{
+    for (const Session& s : g_store.sessions)
+    {
+        if (!s.autoRun) continue;
+
+        std::unique_ptr<Engine> e(new Engine());
+        std::wstring err;
+        if (!e->Start(s, &err))
+        {
+            // No box: FastRoute can easily come up before the application a
+            // session captures, and a dialog to dismiss at every login is the
+            // wrong way to say so. It goes to the log, under Help.
+            LogError(FormatW(L"%s is set to run at startup but did not: %s",
+                             s.name.c_str(),
+                             err.empty() ? L"it could not be started." : err.c_str()));
+            continue;
+        }
+        g_engines[s.id] = std::move(e);
+    }
+    RefreshMainList();
+}
+
+// ---------------------------------------------------------------------------
+
+int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, LPWSTR, int)
+{
+    g_inst = inst;
+
+    HRESULT hrCom = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    if (FAILED(hrCom))
+    {
+        ErrorBox(nullptr, L"COM could not be initialised (" + HrText(hrCom) + L").");
+        return 1;
+    }
+
+    INITCOMMONCONTROLSEX icc{};
+    icc.dwSize = sizeof(icc);
+    icc.dwICC = ICC_LISTVIEW_CLASSES | ICC_TREEVIEW_CLASSES | ICC_BAR_CLASSES |
+                ICC_STANDARD_CLASSES;
+    InitCommonControlsEx(&icc);
+
+    g_store.Load();
+
+    g_mainDlg = CreateDialogParamW(inst, MAKEINTRESOURCEW(IDD_MAIN), nullptr,
+                                   MainDlgProc, 0);
+    if (!g_mainDlg)
+    {
+        ErrorBox(nullptr, L"The main window could not be created.");
+        CoUninitialize();
+        return 1;
+    }
+    ShowWindow(g_mainDlg, SW_SHOW);
+
+    RunStartupSessions();
+
+    MSG msg;
+    while (GetMessageW(&msg, nullptr, 0, 0) > 0)
+    {
+        // Window scoped hotkeys go first: they are only read while one of our
+        // own windows is in front, and the dialog manager would otherwise
+        // swallow the key before anything had a chance to look at it.
+        if (GetActiveWindow() && HandleWindowHotkey(msg)) continue;
+
+        HWND active = GetActiveWindow();
+        if (active)
+        {
+            HACCEL accel = AccelForWindow(active);
+            if (accel && TranslateAcceleratorW(active, accel, &msg)) continue;
+            if (IsDialogMessageW(active, &msg)) continue;
+        }
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+    }
+
+    StopAllSessions();
+    CoUninitialize();
+    return (int)msg.wParam;
+}
+
+void NotifySessionStateChanged(int sessionId)
+{
+    RefreshMainList();
+    RefreshSessionWindow(sessionId);
+}

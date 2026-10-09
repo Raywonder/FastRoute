@@ -1,0 +1,1128 @@
+#include <windows.h>
+#include <commctrl.h>
+#include "resource.h"
+
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+
+/////////////////////////////////////////////////////////////////////////////
+// Icon
+
+IDI_APPMAIN ICON "fastroute.ico"
+
+/////////////////////////////////////////////////////////////////////////////
+// Menu bars
+
+IDR_MAIN_MENU MENU
+BEGIN
+    POPUP "&File"
+    BEGIN
+        MENUITEM "&New Session...\tCtrl+N",      IDM_SESSION_NEW
+        MENUITEM SEPARATOR
+        MENUITEM "&Hide to Tray\tCtrl+H",         IDM_APP_HIDE
+        MENUITEM "&Settings...\tCtrl+Comma",      IDM_APP_SETTINGS
+        MENUITEM SEPARATOR
+        MENUITEM "E&xit",                        IDM_APP_EXIT
+    END
+    POPUP "&Session"
+    BEGIN
+        MENUITEM "&Open\tEnter",                 IDM_SESSION_OPEN
+        MENUITEM "&Run\tCtrl+R",                 IDM_SESSION_RUN
+        MENUITEM "S&top\tCtrl+R",                IDM_SESSION_STOP
+        MENUITEM "Run at &Startup",              IDM_SESSION_AUTORUN
+        MENUITEM "Hot&key...",                   IDM_SESSION_HOTKEY
+        MENUITEM SEPARATOR
+        MENUITEM "Open &Recording Folder\tCtrl+Shift+O", IDM_SESSION_OPENDIR
+        MENUITEM SEPARATOR
+        MENUITEM "Re&name...\tF2",               IDM_SESSION_RENAME
+        MENUITEM "&Delete\tDel",                 IDM_SESSION_DELETE
+    END
+    POPUP "Sc&hedule"
+    BEGIN
+        MENUITEM "&New Event...\tCtrl+Shift+N", IDM_SCHED_NEW
+        MENUITEM "&Edit Event...\tEnter",      IDM_SCHED_EDIT
+        MENUITEM "E&nabled",                     IDM_SCHED_TOGGLE
+        MENUITEM "&Delete Event\tDel",         IDM_SCHED_DELETE
+    END
+    POPUP "&Help"
+    BEGIN
+        MENUITEM "&Error Log...",                IDM_HELP_ERRORS
+        MENUITEM "&About FastRoute",             IDM_HELP_ABOUT
+    END
+END
+
+IDR_SESSION_MENU MENU
+BEGIN
+    POPUP "&Block"
+    BEGIN
+        MENUITEM "&Add Selected Library Block\tEnter", IDM_BLOCK_ADD
+        MENUITEM "&Edit Parameters...\tEnter",         IDM_BLOCK_EDIT
+        MENUITEM "Re&name...\tF2",                     IDM_BLOCK_RENAME
+        MENUITEM "E&nabled\tSpace",                  IDM_BLOCK_TOGGLE
+        MENUITEM "&Remove\tDel",                       IDM_BLOCK_REMOVE
+        MENUITEM SEPARATOR
+        MENUITEM "Move &Up\tCtrl+Up",                  IDM_BLOCK_UP
+        MENUITEM "Move &Down\tCtrl+Down",              IDM_BLOCK_DOWN
+        MENUITEM SEPARATOR
+        MENUITEM "Volume U&p\tAlt+Up",                 IDM_BLOCK_VOL_UP
+        MENUITEM "Volume Do&wn\tAlt+Down",             IDM_BLOCK_VOL_DOWN
+        MENUITEM SEPARATOR
+        MENUITEM "Hot&key...",                   IDM_BLOCK_HOTKEY
+        MENUITEM "Action Hot&keys...",            IDM_BLOCK_ACTIONS
+    END
+    POPUP "&Session"
+    BEGIN
+        MENUITEM "&Run\tCtrl+R",                 IDM_SESS_RUN
+        MENUITEM "S&top\tCtrl+R",                IDM_SESS_STOP
+        MENUITEM "Run at &Startup",              IDM_SESSION_AUTORUN
+        MENUITEM "Hot&key...",                   IDM_SESSION_HOTKEY
+        MENUITEM SEPARATOR
+        MENUITEM "Open &Recording Folder\tCtrl+Shift+O", IDM_SESSION_OPENDIR
+        MENUITEM SEPARATOR
+        MENUITEM "&Hide to Tray\tCtrl+H",         IDM_APP_HIDE
+        MENUITEM "Settin&gs...\tCtrl+Comma",      IDM_APP_SETTINGS
+        MENUITEM SEPARATOR
+        MENUITEM "&Close\tEsc",                  IDM_SESS_CLOSE
+    END
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// Context menus (right click or Shift+F10 / Applications key)
+
+IDR_MAIN_CTX MENU
+BEGIN
+    POPUP "Session"
+    BEGIN
+        MENUITEM "&Open\tEnter",                 IDM_SESSION_OPEN
+        MENUITEM "&Run\tCtrl+R",                 IDM_SESSION_RUN
+        MENUITEM "S&top\tCtrl+R",                IDM_SESSION_STOP
+        MENUITEM "Run at &Startup",              IDM_SESSION_AUTORUN
+        MENUITEM "Hot&key...",                   IDM_SESSION_HOTKEY
+        MENUITEM SEPARATOR
+        MENUITEM "Open &Recording Folder\tCtrl+Shift+O", IDM_SESSION_OPENDIR
+        MENUITEM SEPARATOR
+        MENUITEM "&New Session...\tCtrl+N",      IDM_SESSION_NEW
+        MENUITEM "Re&name...\tF2",               IDM_SESSION_RENAME
+        MENUITEM "&Delete\tDel",                 IDM_SESSION_DELETE
+    END
+END
+
+IDR_BLOCK_CTX MENU
+BEGIN
+    POPUP "Block"
+    BEGIN
+        MENUITEM "&Edit Parameters...\tEnter",   IDM_BLOCK_EDIT
+        MENUITEM "Re&name...\tF2",               IDM_BLOCK_RENAME
+        MENUITEM "E&nabled\tSpace",              IDM_BLOCK_TOGGLE
+        MENUITEM "&Remove\tDel",                 IDM_BLOCK_REMOVE
+        MENUITEM SEPARATOR
+        MENUITEM "Move &Up\tCtrl+Up",            IDM_BLOCK_UP
+        MENUITEM "Move &Down\tCtrl+Down",        IDM_BLOCK_DOWN
+        MENUITEM "Volume U&p\tAlt+Up",          IDM_BLOCK_VOL_UP
+        MENUITEM "Volume Do&wn\tAlt+Down",      IDM_BLOCK_VOL_DOWN
+        MENUITEM "Hot&key...",                   IDM_BLOCK_HOTKEY
+        MENUITEM "Action Hot&keys...",            IDM_BLOCK_ACTIONS
+        MENUITEM SEPARATOR
+        MENUITEM "R&un Session\tCtrl+R",         IDM_SESS_RUN
+        MENUITEM "S&top Session\tCtrl+R",        IDM_SESS_STOP
+        MENUITEM "Run at &Startup",              IDM_SESSION_AUTORUN
+        MENUITEM "Hot&key...",                   IDM_SESSION_HOTKEY
+        MENUITEM SEPARATOR
+        MENUITEM "Open &Recording Folder\tCtrl+Shift+O", IDM_SESSION_OPENDIR
+    END
+END
+
+IDR_LIB_CTX MENU
+BEGIN
+    POPUP "Library"
+    BEGIN
+        MENUITEM "&Add to Session\tEnter",       IDM_BLOCK_ADD
+        MENUITEM SEPARATOR
+        MENUITEM "R&un Session\tCtrl+R",         IDM_SESS_RUN
+        MENUITEM "S&top Session\tCtrl+R",        IDM_SESS_STOP
+        MENUITEM "Run at &Startup",              IDM_SESSION_AUTORUN
+        MENUITEM "Hot&key...",                   IDM_SESSION_HOTKEY
+        MENUITEM SEPARATOR
+        MENUITEM "Open &Recording Folder\tCtrl+Shift+O", IDM_SESSION_OPENDIR
+    END
+END
+
+IDR_SCHED_CTX MENU
+BEGIN
+    POPUP "Event"
+    BEGIN
+        MENUITEM "&Edit Event...\tEnter",      IDM_SCHED_EDIT
+        MENUITEM "E&nabled",                     IDM_SCHED_TOGGLE
+        MENUITEM "&Delete Event\tDel",         IDM_SCHED_DELETE
+        MENUITEM SEPARATOR
+        MENUITEM "&New Event...\tCtrl+Shift+N", IDM_SCHED_NEW
+    END
+END
+
+IDR_TRAY_CTX MENU
+BEGIN
+    POPUP "FastRoute"
+    BEGIN
+        MENUITEM "&Show FastRoute",              IDM_TRAY_SHOW
+        MENUITEM "Settin&gs...",                 IDM_APP_SETTINGS
+        MENUITEM SEPARATOR
+        MENUITEM "E&xit",                        IDM_APP_EXIT
+    END
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// Main window
+
+IDD_MAIN DIALOGEX 0, 0, 420, 272
+STYLE DS_SETFONT | DS_CENTER | WS_MINIMIZEBOX | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "FastRoute"
+MENU IDR_MAIN_MENU
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    CONTROL         "", IDC_MAIN_TABS, WC_TABCONTROL,
+                    WS_TABSTOP | WS_GROUP, 7, 7, 406, 202
+    LTEXT           "&Sessions:", IDC_SESSIONS_LABEL, 13, 26, 300, 9
+    CONTROL         "", IDC_SESSION_LIST, WC_LISTVIEW,
+                    LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_BORDER |
+                    WS_TABSTOP | WS_GROUP, 13, 38, 394, 164
+    LTEXT           "Sc&heduled events:", IDC_SCHED_LABEL, 13, 26, 300, 9
+    CONTROL         "", IDC_SCHED_LIST, WC_LISTVIEW,
+                    LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_BORDER |
+                    WS_TABSTOP | WS_GROUP, 13, 38, 394, 164
+    LTEXT           "&Running now:", IDC_MAIN_RUNNING_LABEL, 7, 216, 406, 9
+    EDITTEXT        IDC_MAIN_RUNNING, 7, 228, 406, 38,
+                    ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL |
+                    WS_TABSTOP | WS_BORDER | WS_GROUP
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// Session window
+
+IDD_SESSION DIALOGEX 0, 0, 480, 286
+STYLE DS_SETFONT | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Session"
+MENU IDR_SESSION_MENU
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "Blocks &library:", -1, 7, 7, 150, 9
+    CONTROL         "", IDC_LIB_TREE, WC_TREEVIEW,
+                    TVS_HASBUTTONS | TVS_HASLINES | TVS_LINESATROOT | TVS_SHOWSELALWAYS |
+                    WS_BORDER | WS_TABSTOP | WS_GROUP, 7, 19, 150, 188
+    LTEXT           "Session &blocks, in pipeline order:", -1, 165, 7, 300, 9
+    CONTROL         "", IDC_BLOCK_LIST, WC_LISTVIEW,
+                    LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_BORDER |
+                    WS_TABSTOP | WS_GROUP, 165, 19, 308, 188
+    LTEXT           "Stopped.", IDC_SESSION_STATE, 7, 214, 466, 18
+    LTEXT           "&Times:", IDC_SESSION_TIMES_LABEL, 7, 236, 466, 9
+    EDITTEXT        IDC_SESSION_TIMES, 7, 248, 466, 32,
+                    ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL |
+                    WS_TABSTOP | WS_GROUP
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// Property dialogs
+
+IDD_NAME DIALOGEX 0, 0, 240, 70
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Session Name"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "Session &name:", IDC_NAME_LABEL, 7, 9, 226, 9
+    EDITTEXT        IDC_NAME_EDIT, 7, 21, 226, 14, ES_AUTOHSCROLL | WS_TABSTOP
+    DEFPUSHBUTTON   "OK",     IDOK,     126, 47, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 183, 47, 50, 16
+END
+
+IDD_BLOCK_APP DIALOGEX 0, 0, 268, 202
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Application Input Block"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    CONTROL         "Capture the application chosen &below", IDC_APP_MODE_NAMED,
+                    "Button", BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP,
+                    7, 7, 254, 10
+    CONTROL         "Capture whatever is in front when this block &starts",
+                    IDC_APP_MODE_FRONT, "Button", BS_AUTORADIOBUTTON, 7, 21, 254, 10
+    CONTROL         "&Follow whatever is in front, switching as it changes",
+                    IDC_APP_MODE_FOLLOW, "Button", BS_AUTORADIOBUTTON, 7, 35, 254, 10
+    LTEXT           "A&pplication:", IDC_APP_LABEL, 7, 55, 190, 9
+    COMBOBOX        IDC_APP_COMBO, 7, 67, 190, 200,
+                    CBS_DROPDOWNLIST | CBS_SORT | WS_VSCROLL | WS_TABSTOP | WS_GROUP
+    PUSHBUTTON      "&Refresh", IDC_BTN_REFRESH, 203, 66, 58, 16
+    LTEXT           "The application's child processes are captured with it. A block that goes by what is in front ignores the Start menu, the task switcher and the desktop, so those never become the target, and it never captures FastRoute itself.",
+                    IDC_APP_NOTE, 7, 88, 254, 34
+    CONTROL         "Block e&nabled", IDC_BLOCK_ENABLED, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 126, 200, 12
+    LTEXT           "&Volume:", -1, 7, 142, 190, 9
+    CONTROL         "", IDC_VOL_SLIDER, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 154, 190, 22
+    LTEXT           "100%", IDC_VOL_TEXT, 203, 160, 58, 9
+    PUSHBUTTON      "&Apply",  IDC_APPLY, 97, 180, 50, 16
+    DEFPUSHBUTTON   "OK",     IDOK,     154, 180, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 211, 180, 50, 16
+END
+
+IDD_BLOCK_DEVICE DIALOGEX 0, 0, 268, 122
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Device Block"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "&Device:", IDC_DEV_LABEL, 7, 9, 190, 9
+    COMBOBOX        IDC_DEV_COMBO, 7, 21, 190, 200,
+                    CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      "Re&fresh", IDC_BTN_REFRESH, 203, 20, 58, 16
+    CONTROL         "Block e&nabled", IDC_BLOCK_ENABLED, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 42, 200, 12
+    LTEXT           "&Volume:", -1, 7, 60, 190, 9
+    CONTROL         "", IDC_VOL_SLIDER, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 72, 190, 22
+    LTEXT           "100%", IDC_VOL_TEXT, 203, 78, 58, 9
+    PUSHBUTTON      "&Apply",  IDC_APPLY, 97, 99, 50, 16
+    DEFPUSHBUTTON   "OK",     IDOK,     154, 99, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 211, 99, 50, 16
+END
+
+IDD_BLOCK_GAIN DIALOGEX 0, 0, 268, 100
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Gain Effect Block"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "&Gain applied to everything above this block:", -1, 7, 9, 254, 9
+    CONTROL         "", IDC_VOL_SLIDER, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 22, 190, 22
+    LTEXT           "100%", IDC_VOL_TEXT, 203, 28, 58, 9
+    CONTROL         "Block e&nabled", IDC_BLOCK_ENABLED, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 50, 200, 12
+    PUSHBUTTON      "&Apply",  IDC_APPLY, 97, 77, 50, 16
+    DEFPUSHBUTTON   "OK",     IDOK,     154, 77, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 211, 77, 50, 16
+END
+
+IDD_ABOUT DIALOGEX 0, 0, 260, 96
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "About FastRoute"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "", IDC_ABOUT_TEXT, 7, 9, 246, 60
+    DEFPUSHBUTTON   "OK", IDOK, 203, 73, 50, 16
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// Accelerators
+
+IDR_MAIN_MENU ACCELERATORS
+BEGIN
+    "N",        IDM_SESSION_NEW,    VIRTKEY, CONTROL
+    "N",        IDM_SCHED_NEW,      VIRTKEY, CONTROL, SHIFT
+    "R",        IDM_SESSION_TOGGLE, VIRTKEY, CONTROL
+    "H",        IDM_APP_HIDE,       VIRTKEY, CONTROL
+    VK_OEM_COMMA, IDM_APP_SETTINGS, VIRTKEY, CONTROL
+    "O",        IDM_SESSION_OPENDIR, VIRTKEY, CONTROL, SHIFT
+    VK_F2,      IDM_SESSION_RENAME, VIRTKEY
+END
+
+IDR_SESSION_MENU ACCELERATORS
+BEGIN
+    "R",        IDM_SESS_TOGGLE,    VIRTKEY, CONTROL
+    VK_F2,      IDM_BLOCK_RENAME,   VIRTKEY
+    VK_UP,      IDM_BLOCK_UP,       VIRTKEY, CONTROL
+    VK_DOWN,    IDM_BLOCK_DOWN,     VIRTKEY, CONTROL
+    VK_UP,      IDM_BLOCK_VOL_UP,   VIRTKEY, ALT
+    VK_DOWN,    IDM_BLOCK_VOL_DOWN, VIRTKEY, ALT
+    "H",        IDM_APP_HIDE,       VIRTKEY, CONTROL
+    VK_OEM_COMMA, IDM_APP_SETTINGS, VIRTKEY, CONTROL
+    "O",        IDM_SESSION_OPENDIR, VIRTKEY, CONTROL, SHIFT
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// Denoise and recorder blocks
+
+IDD_BLOCK_DENOISE DIALOGEX 0, 0, 268, 130
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Denoise Block"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "Noise &suppression:", IDC_SUP_LABEL, 7, 9, 190, 9
+    CONTROL         "", IDC_SUP_SLIDER, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 21, 190, 22
+    LTEXT           "20 dB", IDC_SUP_TEXT, 203, 27, 58, 9
+    LTEXT           "&Mix, dry to fully denoised:", -1, 7, 49, 190, 9
+    CONTROL         "", IDC_MIX_SLIDER, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 61, 190, 22
+    LTEXT           "100%", IDC_MIX_TEXT, 203, 67, 58, 9
+    CONTROL         "Block e&nabled", IDC_BLOCK_ENABLED, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 89, 200, 12
+    PUSHBUTTON      "&Apply",  IDC_APPLY, 97, 107, 50, 16
+    DEFPUSHBUTTON   "OK",     IDOK,     154, 107, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 211, 107, 50, 16
+END
+
+IDD_BLOCK_RECORDER DIALOGEX 0, 0, 320, 306
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Recorder Block"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "Save &recordings to:", -1, 7, 7, 240, 9
+    EDITTEXT        IDC_REC_FOLDER, 7, 19, 240, 14, ES_AUTOHSCROLL | WS_TABSTOP
+    PUSHBUTTON      "Br&owse...", IDC_REC_BROWSE, 253, 18, 60, 16
+    LTEXT           "File name &template:", -1, 7, 41, 306, 9
+    EDITTEXT        IDC_REC_TEMPLATE, 7, 53, 306, 14, ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT           "", IDC_REC_TOKENS, 7, 71, 306, 18
+    LTEXT           "&Format:", -1, 7, 93, 120, 9
+    COMBOBOX        IDC_REC_FORMAT, 7, 105, 120, 100,
+                    CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "&Bitrate:", IDC_REC_KBPS_LABEL, 145, 93, 120, 9
+    COMBOBOX        IDC_REC_KBPS, 145, 105, 120, 100,
+                    CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+
+    CONTROL         "&Skip silence, writing nothing while it is quiet",
+                    IDC_REC_GATE, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 127, 306, 12
+    LTEXT           "&Level:", IDC_REC_GATE_LABEL, 7, 147, 40, 9
+    CONTROL         "", IDC_REC_GATE_SLIDER, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 51, 141, 150, 22
+    LTEXT           "-50 dB", IDC_REC_GATE_TEXT, 207, 147, 60, 9
+    LTEXT           "&Keep going for:", IDC_REC_HOLD_LABEL, 7, 173, 62, 9
+    CONTROL         "", IDC_REC_HOLD_SLIDER, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 71, 167, 130, 22
+    LTEXT           "2 s", IDC_REC_HOLD_TEXT, 207, 173, 60, 9
+
+    LTEXT           "Start ne&w file:", -1, 7, 195, 150, 9
+    COMBOBOX        IDC_REC_SPLIT, 7, 207, 150, 120,
+                    CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "&Every:", IDC_REC_SPLIT_LABEL, 163, 195, 50, 9
+    EDITTEXT        IDC_REC_SPLIT_VALUE, 163, 207, 44, 14,
+                    ES_AUTOHSCROLL | ES_NUMBER | WS_TABSTOP
+    LTEXT           "", IDC_REC_SPLIT_UNITS, 213, 209, 100, 9
+
+    LTEXT           "&Volume:", -1, 7, 229, 190, 9
+    CONTROL         "", IDC_VOL_SLIDER, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 241, 190, 22
+    LTEXT           "100%", IDC_VOL_TEXT, 203, 247, 60, 9
+    CONTROL         "Block e&nabled", IDC_BLOCK_ENABLED, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 267, 200, 12
+    PUSHBUTTON      "&Apply",  IDC_APPLY, 149, 284, 50, 16
+    DEFPUSHBUTTON   "OK",     IDOK,     206, 284, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 263, 284, 50, 16
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// Tone, equaliser and channel blocks
+
+IDD_BLOCK_TONE DIALOGEX 0, 0, 268, 128
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Bass and Treble Block"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "&Bass, low shelf at 100 Hz:", -1, 7, 9, 190, 9
+    CONTROL         "", IDC_BASS_SLIDER, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 21, 190, 22
+    LTEXT           "0 dB", IDC_BASS_TEXT, 203, 27, 58, 9
+    LTEXT           "&Treble, high shelf at 4 kHz:", -1, 7, 49, 190, 9
+    CONTROL         "", IDC_TREB_SLIDER, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 61, 190, 22
+    LTEXT           "0 dB", IDC_TREB_TEXT, 203, 67, 58, 9
+    CONTROL         "Block e&nabled", IDC_BLOCK_ENABLED, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 89, 200, 12
+    PUSHBUTTON      "&Apply",  IDC_APPLY, 97, 105, 50, 16
+    DEFPUSHBUTTON   "OK",     IDOK,     154, 105, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 211, 105, 50, 16
+END
+
+IDD_BLOCK_EQ10 DIALOGEX 0, 0, 340, 224
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "10 Band EQ Block"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "Gain for each band, from -12 to +12 dB:", -1, 7, 7, 326, 9
+    LTEXT           "31 Hz:", -1, 7, 26, 40, 9
+    CONTROL         "", IDC_EQ_SLIDER_BASE+0, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 51, 20, 74, 22
+    LTEXT           "0 dB", IDC_EQ_TEXT_BASE+0, 129, 26, 36, 9
+    LTEXT           "62 Hz:", -1, 7, 54, 40, 9
+    CONTROL         "", IDC_EQ_SLIDER_BASE+1, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 51, 48, 74, 22
+    LTEXT           "0 dB", IDC_EQ_TEXT_BASE+1, 129, 54, 36, 9
+    LTEXT           "125 Hz:", -1, 7, 82, 40, 9
+    CONTROL         "", IDC_EQ_SLIDER_BASE+2, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 51, 76, 74, 22
+    LTEXT           "0 dB", IDC_EQ_TEXT_BASE+2, 129, 82, 36, 9
+    LTEXT           "250 Hz:", -1, 7, 110, 40, 9
+    CONTROL         "", IDC_EQ_SLIDER_BASE+3, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 51, 104, 74, 22
+    LTEXT           "0 dB", IDC_EQ_TEXT_BASE+3, 129, 110, 36, 9
+    LTEXT           "500 Hz:", -1, 7, 138, 40, 9
+    CONTROL         "", IDC_EQ_SLIDER_BASE+4, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 51, 132, 74, 22
+    LTEXT           "0 dB", IDC_EQ_TEXT_BASE+4, 129, 138, 36, 9
+    LTEXT           "1 kHz:", -1, 172, 26, 40, 9
+    CONTROL         "", IDC_EQ_SLIDER_BASE+5, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 216, 20, 74, 22
+    LTEXT           "0 dB", IDC_EQ_TEXT_BASE+5, 294, 26, 36, 9
+    LTEXT           "2 kHz:", -1, 172, 54, 40, 9
+    CONTROL         "", IDC_EQ_SLIDER_BASE+6, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 216, 48, 74, 22
+    LTEXT           "0 dB", IDC_EQ_TEXT_BASE+6, 294, 54, 36, 9
+    LTEXT           "4 kHz:", -1, 172, 82, 40, 9
+    CONTROL         "", IDC_EQ_SLIDER_BASE+7, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 216, 76, 74, 22
+    LTEXT           "0 dB", IDC_EQ_TEXT_BASE+7, 294, 82, 36, 9
+    LTEXT           "8 kHz:", -1, 172, 110, 40, 9
+    CONTROL         "", IDC_EQ_SLIDER_BASE+8, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 216, 104, 74, 22
+    LTEXT           "0 dB", IDC_EQ_TEXT_BASE+8, 294, 110, 36, 9
+    LTEXT           "16 kHz:", -1, 172, 138, 40, 9
+    CONTROL         "", IDC_EQ_SLIDER_BASE+9, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 216, 132, 74, 22
+    LTEXT           "0 dB", IDC_EQ_TEXT_BASE+9, 294, 138, 36, 9
+    PUSHBUTTON      "Reset to &Flat", IDC_EQ_RESET, 7, 162, 76, 16
+    CONTROL         "Block e&nabled", IDC_BLOCK_ENABLED, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 184, 200, 12
+    PUSHBUTTON      "&Apply",  IDC_APPLY, 169, 200, 50, 16
+    DEFPUSHBUTTON   "OK",     IDOK,     226, 200, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 283, 200, 50, 16
+END
+
+IDD_BLOCK_CHANNELS DIALOGEX 0, 0, 280, 342
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Channel Mixer Block"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "Left channel &volume:", -1, 7, 6, 190, 9
+    CONTROL         "", IDC_CHAN_LVOL, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 17, 190, 22
+    LTEXT           "0 dB", IDC_CHAN_LVOL_TEXT, 203, 23, 70, 9
+    LTEXT           "Left channel &pan:", -1, 7, 41, 190, 9
+    CONTROL         "", IDC_CHAN_LPAN, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 52, 190, 22
+    LTEXT           "hard left", IDC_CHAN_LPAN_TEXT, 203, 58, 70, 9
+    LTEXT           "Right channel vol&ume:", -1, 7, 76, 190, 9
+    CONTROL         "", IDC_CHAN_RVOL, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 87, 190, 22
+    LTEXT           "0 dB", IDC_CHAN_RVOL_TEXT, 203, 93, 70, 9
+    LTEXT           "Ri&ght channel pan:", -1, 7, 111, 190, 9
+    CONTROL         "", IDC_CHAN_RPAN, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 122, 190, 22
+    LTEXT           "hard right", IDC_CHAN_RPAN_TEXT, 203, 128, 70, 9
+    LTEXT           "The defaults - each channel hard over on its own side - change nothing.",
+                    -1, 7, 148, 266, 9
+    PUSHBUTTON      "Rese&t channels", IDC_CHAN_RESET, 7, 162, 90, 16
+    LTEXT           "Stereo &width:", -1, 7, 186, 190, 9
+    CONTROL         "", IDC_WIDTH_SLIDER, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 197, 190, 22
+    LTEXT           "100%", IDC_WIDTH_TEXT, 203, 203, 70, 9
+    LTEXT           "0% is mono, 100% leaves the channels as they are, and 200% doubles the difference between them.",
+                    IDC_CHAN_NOTE, 7, 223, 266, 18
+    CONTROL         "&Reverse the left and right channels", IDC_CHAN_SWAP, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 245, 266, 12
+    CONTROL         "&Cancel the centre, which removes most lead vocals", IDC_CHAN_CENTRE, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 261, 266, 12
+    LTEXT           "What centre cancel leaves behind is out of phase between the two channels, so it disappears if the audio is later summed to mono.",
+                    -1, 7, 277, 266, 18
+    CONTROL         "Block e&nabled", IDC_BLOCK_ENABLED, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 301, 200, 12
+    PUSHBUTTON      "&Apply",  IDC_APPLY, 109, 319, 50, 16
+    DEFPUSHBUTTON   "OK",     IDOK,     166, 319, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 223, 319, 50, 16
+END
+
+IDD_BLOCK_COMP DIALOGEX 0, 0, 280, 270
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Compressor Block"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "&Threshold, the level reduction starts at:", -1, 7, 9, 190, 9
+    CONTROL         "", IDC_COMP_THRESH, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 21, 190, 22
+    LTEXT           "-20 dB", IDC_COMP_THRESH_TEXT, 203, 27, 70, 9
+    LTEXT           "&Ratio, how much of what is over it gets through:", -1, 7, 49, 190, 9
+    CONTROL         "", IDC_COMP_RATIO, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 61, 190, 22
+    LTEXT           "4:1", IDC_COMP_RATIO_TEXT, 203, 67, 70, 9
+    LTEXT           "Atta&ck, how fast it takes hold:", -1, 7, 89, 190, 9
+    CONTROL         "", IDC_COMP_ATTACK, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 101, 190, 22
+    LTEXT           "10 ms", IDC_COMP_ATTACK_TEXT, 203, 107, 70, 9
+    LTEXT           "Re&lease, how fast it lets go again:", -1, 7, 129, 190, 9
+    CONTROL         "", IDC_COMP_RELEASE, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 141, 190, 22
+    LTEXT           "100 ms", IDC_COMP_RELEASE_TEXT, 203, 147, 70, 9
+    CONTROL         "A&utomatic makeup gain", IDC_COMP_AUTO, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 169, 266, 12
+    LTEXT           "&Makeup gain, added after the reduction:",
+                    IDC_COMP_MAKEUP_LABEL, 7, 187, 190, 9
+    CONTROL         "", IDC_COMP_MAKEUP, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 199, 190, 22
+    LTEXT           "+0 dB", IDC_COMP_MAKEUP_TEXT, 203, 205, 70, 9
+    CONTROL         "Block e&nabled", IDC_BLOCK_ENABLED, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 227, 200, 12
+    PUSHBUTTON      "&Apply",  IDC_APPLY, 109, 247, 50, 16
+    DEFPUSHBUTTON   "OK",     IDOK,     166, 247, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 223, 247, 50, 16
+END
+
+IDD_NET_OPUS DIALOGEX 0, 0, 280, 206
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Opus Settings"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "Protect against &loss of:", -1, 7, 9, 190, 9
+    CONTROL         "", IDC_NO_LOSS, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 21, 190, 22
+    LTEXT           "5%", IDC_NO_LOSS_TEXT, 203, 27, 70, 9
+    LTEXT           "&Complexity, quality against processor time:", -1, 7, 49, 190, 9
+    CONTROL         "", IDC_NO_CPLX, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 61, 190, 22
+    LTEXT           "10", IDC_NO_CPLX_TEXT, 203, 67, 70, 9
+    LTEXT           "What it is carr&ying:", -1, 7, 89, 130, 9
+    COMBOBOX        IDC_NO_SIGNAL, 7, 101, 130, 100,
+                    CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Bit&rate mode:", -1, 145, 89, 128, 9
+    COMBOBOX        IDC_NO_RATEMODE, 145, 101, 128, 100,
+                    CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    CONTROL         "Send almost &nothing while the input is silent",
+                    IDC_NO_DTX, "Button", BS_AUTOCHECKBOX | WS_TABSTOP,
+                    7, 123, 266, 12
+    LTEXT           "", IDC_NO_NOTE, 7, 141, 266, 34
+    DEFPUSHBUTTON   "OK",     IDOK,     166, 183, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 223, 183, 50, 16
+END
+
+IDD_BLOCK_NETRECV DIALOGEX 0, 0, 320, 336
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Net Receive Block"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "&Protocol:", -1, 7, 9, 120, 9
+    COMBOBOX        IDC_NR_PROTOCOL, 7, 21, 140, 100,
+                    CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Senders &found on the network:", -1, 7, 43, 240, 9
+    LISTBOX         IDC_NR_FOUND, 7, 55, 306, 72,
+                    LBS_NOTIFY | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      "&Search again", IDC_NR_REFRESH, 7, 131, 80, 14
+    LTEXT           "Machine sending it, if it is not in the &list:", -1, 7, 153, 200, 9
+    EDITTEXT        IDC_NR_ADDRESS, 7, 165, 200, 14, ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT           "P&ort:", -1, 215, 153, 60, 9
+    EDITTEXT        IDC_NR_PORT, 215, 165, 60, 14,
+                    ES_AUTOHSCROLL | ES_NUMBER | WS_TABSTOP
+    LTEXT           "Stream na&me:", -1, 7, 185, 200, 9
+    EDITTEXT        IDC_NR_NAME, 7, 197, 200, 14, ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT           "&Buffer, how much it holds back before playing:", -1, 7, 217, 230, 9
+    CONTROL         "", IDC_NR_BUFFER, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 229, 230, 22
+    LTEXT           "60 ms", IDC_NR_BUFFER_TEXT, 243, 235, 70, 9
+    LTEXT           "", IDC_NR_NOTE, 7, 255, 306, 34
+    CONTROL         "Block e&nabled", IDC_BLOCK_ENABLED, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 295, 200, 12
+    PUSHBUTTON      "&Apply",  IDC_APPLY, 149, 313, 50, 16
+    DEFPUSHBUTTON   "OK",     IDOK,     206, 313, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 263, 313, 50, 16
+END
+
+IDD_BLOCK_NETSEND DIALOGEX 0, 0, 320, 350
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Net Send Block"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "&Protocol:", -1, 7, 9, 120, 9
+    COMBOBOX        IDC_NS_PROTOCOL, 7, 21, 130, 100,
+                    CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Send &to:", -1, 145, 9, 120, 9
+    COMBOBOX        IDC_NS_MODE, 145, 21, 168, 100,
+                    CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "A&ddress:", IDC_NS_ADDRESS_LABEL, 7, 43, 200, 9
+    EDITTEXT        IDC_NS_ADDRESS, 7, 55, 200, 14, ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT           "P&ort:", -1, 215, 43, 60, 9
+    EDITTEXT        IDC_NS_PORT, 215, 55, 60, 14,
+                    ES_AUTOHSCROLL | ES_NUMBER | WS_TABSTOP
+    LTEXT           "Stream na&me:", -1, 7, 75, 200, 9
+    EDITTEXT        IDC_NS_NAME, 7, 87, 200, 14, ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT           "&Codec:", IDC_NS_CODEC_LABEL, 7, 107, 200, 9
+    COMBOBOX        IDC_NS_CODEC, 7, 119, 200, 100,
+                    CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Packet &length:", -1, 7, 141, 190, 9
+    CONTROL         "", IDC_NS_PACKET, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 153, 190, 22
+    LTEXT           "5 ms", IDC_NS_PACKET_TEXT, 203, 159, 110, 9
+    LTEXT           "Opus &bitrate:", IDC_NS_KBPS_LABEL, 7, 181, 190, 9
+    CONTROL         "", IDC_NS_KBPS, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 193, 190, 22
+    LTEXT           "128 kbps", IDC_NS_KBPS_TEXT, 203, 196, 110, 9
+    PUSHBUTTON      "Opus settin&gs...", IDC_NS_OPUSMORE, 203, 207, 80, 14
+    LTEXT           "&Hops a group packet may cross:", IDC_NS_TTL_LABEL, 7, 227, 190, 9
+    CONTROL         "", IDC_NS_TTL, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 239, 190, 22
+    LTEXT           "1", IDC_NS_TTL_TEXT, 203, 245, 110, 9
+    LTEXT           "", IDC_NS_NOTE, 7, 267, 306, 34
+    CONTROL         "Block e&nabled", IDC_BLOCK_ENABLED, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 309, 200, 12
+    PUSHBUTTON      "&Apply",  IDC_APPLY, 149, 327, 50, 16
+    DEFPUSHBUTTON   "OK",     IDOK,     206, 327, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 263, 327, 50, 16
+END
+
+IDD_BLOCK_PITCH DIALOGEX 0, 0, 280, 224
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Pitch Shifter Block"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "&Semitones, whole notes up or down:", -1, 7, 9, 190, 9
+    CONTROL         "", IDC_PITCH_SEMIS, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 21, 190, 22
+    LTEXT           "0 semitones", IDC_PITCH_SEMIS_TEXT, 203, 27, 70, 9
+    LTEXT           "&Cents, the hundredths in between:", -1, 7, 49, 190, 9
+    CONTROL         "", IDC_PITCH_CENTS, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 61, 190, 22
+    LTEXT           "0 cents", IDC_PITCH_CENTS_TEXT, 203, 67, 70, 9
+    LTEXT           "&Quality, which is also the delay it adds:", -1, 7, 89, 190, 9
+    COMBOBOX        IDC_PITCH_QUALITY, 7, 101, 190, 100,
+                    CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "No shift", IDC_PITCH_SUMMARY, 7, 125, 266, 9
+    LTEXT           "Moving the pitch without moving the speed means working a window at a time, and the block cannot say anything about a sound until it has a whole window of it - so the delay is the window, and the quality setting is really a choice of how much delay to spend. At no shift at all nothing is built and nothing is delayed.",
+                    IDC_PITCH_NOTE, 7, 139, 266, 34
+    CONTROL         "Block e&nabled", IDC_BLOCK_ENABLED, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 181, 200, 12
+    PUSHBUTTON      "&Apply",  IDC_APPLY, 109, 201, 50, 16
+    DEFPUSHBUTTON   "OK",     IDOK,     166, 201, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 223, 201, 50, 16
+END
+
+IDD_BLOCK_LIMIT DIALOGEX 0, 0, 280, 202
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Limiter Block"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "&Ceiling, which nothing is allowed above:", -1, 7, 9, 190, 9
+    CONTROL         "", IDC_LIM_CEIL, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 21, 190, 22
+    LTEXT           "-1 dB", IDC_LIM_CEIL_TEXT, 203, 27, 70, 9
+    LTEXT           "&Release, how fast the level comes back:", -1, 7, 49, 190, 9
+    CONTROL         "", IDC_LIM_RELEASE, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 61, 190, 22
+    LTEXT           "50 ms", IDC_LIM_RELEASE_TEXT, 203, 67, 70, 9
+    LTEXT           "&Lookahead, which is also the delay it adds:", -1, 7, 89, 190, 9
+    CONTROL         "", IDC_LIM_LOOK, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 101, 190, 22
+    LTEXT           "5 ms", IDC_LIM_LOOK_TEXT, 203, 107, 70, 9
+    LTEXT           "Lookahead holds the audio back so the level is already down when a peak arrives. At zero there is nothing to look ahead at and the ceiling is enforced by clipping.",
+                    IDC_LIM_NOTE, 7, 127, 266, 26
+    CONTROL         "Block e&nabled", IDC_BLOCK_ENABLED, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 159, 200, 12
+    PUSHBUTTON      "&Apply",  IDC_APPLY, 109, 179, 50, 16
+    DEFPUSHBUTTON   "OK",     IDOK,     166, 179, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 223, 179, 50, 16
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// Normaliser block
+
+IDD_BLOCK_NORM DIALOGEX 0, 0, 280, 264
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Normaliser Block"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "&Target level, which the loudest part is brought to:", -1, 7, 9, 190, 9
+    CONTROL         "", IDC_NORM_TARGET, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 21, 190, 22
+    LTEXT           "-3 dB", IDC_NORM_TARGET_TEXT, 203, 27, 70, 9
+    LTEXT           "&Lookahead, which is also the delay it adds:", -1, 7, 49, 190, 9
+    CONTROL         "", IDC_NORM_LOOK, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 61, 190, 22
+    LTEXT           "50 ms", IDC_NORM_LOOK_TEXT, 203, 67, 70, 9
+    LTEXT           "&Maximum boost, the most it will ever turn up:", -1, 7, 89, 190, 9
+    CONTROL         "", IDC_NORM_MAXGAIN, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 101, 190, 22
+    LTEXT           "20 dB", IDC_NORM_MAXGAIN_TEXT, 203, 107, 70, 9
+    LTEXT           "&Release, how fast the gain comes back up:", -1, 7, 129, 190, 9
+    CONTROL         "", IDC_NORM_RELEASE, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 141, 190, 22
+    LTEXT           "1000 ms", IDC_NORM_RELEASE_TEXT, 203, 147, 70, 9
+    LTEXT           "The gain follows the signal so the loudest part sits on the target. Lookahead holds the audio back so the level is already down when a peak arrives. Maximum boost is what stops a quiet passage being lifted until the room tone is loud.",
+                    IDC_NORM_NOTE, 7, 169, 266, 42
+    CONTROL         "Block e&nabled", IDC_BLOCK_ENABLED, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 219, 200, 12
+    PUSHBUTTON      "&Apply",  IDC_APPLY, 109, 241, 50, 16
+    DEFPUSHBUTTON   "OK",     IDOK,     166, 241, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 223, 241, 50, 16
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// Buffer block
+
+IDD_BLOCK_BUFFER DIALOGEX 0, 0, 320, 288
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Buffer Block"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "&How much audio to keep:", -1, 7, 9, 190, 9
+    CONTROL         "", IDC_BUF_SECONDS, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 21, 190, 22
+    LTEXT           "1:00", IDC_BUF_SECONDS_TEXT, 203, 27, 110, 9
+    LTEXT           "How far one &rewind or fast forward moves:", -1, 7, 49, 190, 9
+    CONTROL         "", IDC_BUF_STEP, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 61, 190, 22
+    LTEXT           "10 s", IDC_BUF_STEP_TEXT, 203, 67, 110, 9
+
+    LTEXT           "Save the buffer &to:", -1, 7, 91, 240, 9
+    EDITTEXT        IDC_REC_FOLDER, 7, 103, 240, 14, ES_AUTOHSCROLL | WS_TABSTOP
+    PUSHBUTTON      "Br&owse...", IDC_REC_BROWSE, 253, 102, 60, 16
+    LTEXT           "File name t&emplate:", -1, 7, 125, 306, 9
+    EDITTEXT        IDC_REC_TEMPLATE, 7, 137, 306, 14, ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT           "", IDC_REC_TOKENS, 7, 155, 306, 18
+    LTEXT           "&Format:", -1, 7, 177, 120, 9
+    COMBOBOX        IDC_REC_FORMAT, 7, 189, 120, 100,
+                    CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "&Bitrate:", IDC_REC_KBPS_LABEL, 145, 177, 120, 9
+    COMBOBOX        IDC_REC_KBPS, 145, 189, 120, 100,
+                    CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+
+    PUSHBUTTON      "Action Hot&keys...", IDC_BUF_ACTIONS, 7, 213, 100, 16
+    LTEXT           "", IDC_BUF_NOTE, 115, 213, 198, 26
+    CONTROL         "Block e&nabled", IDC_BLOCK_ENABLED, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 245, 200, 12
+    PUSHBUTTON      "&Apply",  IDC_APPLY, 149, 265, 50, 16
+    DEFPUSHBUTTON   "OK",     IDOK,     206, 265, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 263, 265, 50, 16
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// Action hotkeys for one block
+
+IDD_BLOCK_ACTIONS DIALOGEX 0, 0, 300, 220
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Action Hotkeys"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "&Actions on this block, and the keys that do them:", -1, 7, 7, 286, 9
+    CONTROL         "", IDC_ACT_LIST, WC_LISTVIEW,
+                    LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_BORDER |
+                    WS_TABSTOP | WS_GROUP, 7, 19, 286, 90
+    PUSHBUTTON      "&Set Hotkey...", IDC_ACT_SET,   7, 115, 90, 16
+    PUSHBUTTON      "&Clear",         IDC_ACT_CLEAR, 103, 115, 60, 16
+    LTEXT           "", IDC_ACT_NOTE, 7, 139, 286, 42
+    DEFPUSHBUTTON   "OK",     IDOK,     186, 195, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 243, 195, 50, 16
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// Clipping monitor block
+
+IDD_BLOCK_CLIPMON DIALOGEX 0, 0, 280, 196
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Clipping Monitor Block"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "&Level that counts as clipping:", -1, 7, 9, 190, 9
+    CONTROL         "", IDC_CLIP_THRESH, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 21, 190, 22
+    LTEXT           "full scale", IDC_CLIP_THRESH_TEXT, 203, 27, 70, 9
+    LTEXT           "Least time &between beeps:", -1, 7, 49, 190, 9
+    CONTROL         "", IDC_CLIP_INTERVAL, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 61, 190, 22
+    LTEXT           "2 s", IDC_CLIP_INTERVAL_TEXT, 203, 67, 70, 9
+    LTEXT           "This block does not change the audio: it listens and beeps. The beep goes to the default output device, not into this session, so nothing downstream hears it - unless the session is itself capturing system audio or this application.",
+                    IDC_CLIP_NOTE, 7, 89, 266, 50
+    CONTROL         "Block e&nabled", IDC_BLOCK_ENABLED, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 151, 200, 12
+    PUSHBUTTON      "&Apply",  IDC_APPLY, 109, 173, 50, 16
+    DEFPUSHBUTTON   "OK",     IDOK,     166, 173, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 223, 173, 50, 16
+END
+
+IDD_BLOCK_PLUGIN DIALOGEX 0, 0, 320, 244
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Plugin Block"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "", IDC_PP_NAME, 7, 7, 306, 18
+    LTEXT           "&Parameters:", -1, 7, 29, 306, 9
+    LISTBOX         IDC_PP_LIST, 7, 41, 306, 96,
+                    LBS_NOTIFY | LBS_HASSTRINGS | WS_VSCROLL | WS_TABSTOP |
+                    WS_BORDER | WS_GROUP
+    LTEXT           "&Value:", IDC_PP_VALUE_LABEL, 7, 145, 60, 9
+    CONTROL         "", IDC_PP_SLIDER, "msctls_trackbar32",
+                    TBS_HORZ | WS_TABSTOP | WS_GROUP, 7, 157, 200, 22
+    COMBOBOX        IDC_PP_CHOICE, 7, 157, 200, 200,
+                    CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "", IDC_PP_TEXT, 213, 163, 100, 9
+    PUSHBUTTON      "&Open plugin editor...", IDC_PP_EDITOR, 7, 185, 110, 16
+    PUSHBUTTON      "&Reset to defaults", IDC_PP_RESET, 123, 185, 100, 16
+    CONTROL         "Block e&nabled", IDC_BLOCK_ENABLED, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 208, 200, 12
+    PUSHBUTTON      "&Apply",  IDC_APPLY, 149, 222, 50, 16
+    DEFPUSHBUTTON   "OK",     IDOK,     206, 222, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 263, 222, 50, 16
+END
+
+IDD_BLOCK_GATE DIALOGEX 0, 0, 280, 330
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Noise Gate Block"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "&Threshold, below which the gate shuts:", -1, 7, 9, 190, 9
+    CONTROL         "", IDC_GATE_THRESH, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 21, 190, 22
+    LTEXT           "-40 dB", IDC_GATE_THRESH_TEXT, 203, 27, 70, 9
+    LTEXT           "&Cut applied while it is shut:", -1, 7, 49, 190, 9
+    CONTROL         "", IDC_GATE_RANGE, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 61, 190, 22
+    LTEXT           "60 dB", IDC_GATE_RANGE_TEXT, 203, 67, 70, 9
+    LTEXT           "Attac&k, how fast it opens:", -1, 7, 89, 190, 9
+    CONTROL         "", IDC_GATE_ATTACK, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 101, 190, 22
+    LTEXT           "5 ms", IDC_GATE_ATTACK_TEXT, 203, 107, 70, 9
+    LTEXT           "&Hold, how long it stays open after the sound stops:", -1, 7, 129, 190, 9
+    CONTROL         "", IDC_GATE_HOLD, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 141, 190, 22
+    LTEXT           "200 ms", IDC_GATE_HOLD_TEXT, 203, 147, 70, 9
+    LTEXT           "Re&lease, how fast it shuts afterwards:", -1, 7, 169, 190, 9
+    CONTROL         "", IDC_GATE_RELEASE, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 181, 190, 22
+    LTEXT           "150 ms", IDC_GATE_RELEASE_TEXT, 203, 187, 70, 9
+    LTEXT           "L&ookahead, how early it starts opening:", -1, 7, 209, 190, 9
+    CONTROL         "", IDC_GATE_LOOK, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 221, 190, 22
+    LTEXT           "5 ms", IDC_GATE_LOOK_TEXT, 203, 227, 70, 9
+    LTEXT           "The gate opens at the threshold but does not shut until the sound has fallen 3 dB below it, so a signal sitting on the line does not switch it on and off. A cut of 0 dB turns the gate off. The lookahead delays the audio by its own length, which is how the gate can be open before the sound arrives; set it at least as long as the attack, or the attack will still be running when the sound gets there.",
+                    IDC_GATE_NOTE, 7, 247, 266, 42
+    CONTROL         "Block e&nabled", IDC_BLOCK_ENABLED, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 293, 200, 12
+    PUSHBUTTON      "&Apply",  IDC_APPLY, 109, 307, 50, 16
+    DEFPUSHBUTTON   "OK",     IDOK,     166, 307, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 223, 307, 50, 16
+END
+
+IDD_BLOCK_PARA DIALOGEX 0, 0, 300, 264
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "4 Band Parametric EQ Block"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "&Bands:", -1, 7, 7, 286, 9
+    LISTBOX         IDC_PEQ_LIST, 7, 19, 286, 52,
+                    LBS_NOTIFY | LBS_HASSTRINGS | WS_VSCROLL | WS_TABSTOP |
+                    WS_BORDER | WS_GROUP
+    LTEXT           "&Shape:", IDC_PEQ_TYPE_LABEL, 7, 79, 60, 9
+    COMBOBOX        IDC_PEQ_TYPE, 70, 77, 120, 200,
+                    CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP | WS_GROUP
+    LTEXT           "&Frequency:", IDC_PEQ_FREQ_LABEL, 7, 99, 80, 9
+    CONTROL         "", IDC_PEQ_FREQ, "msctls_trackbar32",
+                    TBS_HORZ | WS_TABSTOP | WS_GROUP, 7, 111, 210, 22
+    LTEXT           "1.0 kHz", IDC_PEQ_FREQ_TEXT, 223, 117, 70, 9
+    LTEXT           "&Gain:", IDC_PEQ_GAIN_LABEL, 7, 139, 80, 9
+    CONTROL         "", IDC_PEQ_GAIN, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP | WS_GROUP, 7, 151, 210, 22
+    LTEXT           "+0 dB", IDC_PEQ_GAIN_TEXT, 223, 157, 70, 9
+    LTEXT           "&Q, how narrow the band is:", IDC_PEQ_Q_LABEL, 7, 179, 120, 9
+    CONTROL         "", IDC_PEQ_Q, "msctls_trackbar32",
+                    TBS_HORZ | WS_TABSTOP | WS_GROUP, 7, 191, 210, 22
+    LTEXT           "1.0", IDC_PEQ_Q_TEXT, 223, 197, 70, 9
+    PUSHBUTTON      "&Reset all bands", IDC_PEQ_RESET, 7, 218, 90, 16
+    CONTROL         "Block e&nabled", IDC_BLOCK_ENABLED, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 105, 221, 80, 12
+    PUSHBUTTON      "&Apply",  IDC_APPLY, 129, 240, 50, 16
+    DEFPUSHBUTTON   "OK",     IDOK,     186, 240, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 243, 240, 50, 16
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// Error log
+
+IDD_ERRORLOG DIALOGEX 0, 0, 380, 216
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Error Log"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "&Errors reported since FastRoute started, oldest first:",
+                    -1, 7, 7, 366, 9
+    EDITTEXT        IDC_LOG_TEXT, 7, 19, 366, 168,
+                    ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | ES_WANTRETURN |
+                    WS_VSCROLL | WS_TABSTOP | WS_BORDER
+    PUSHBUTTON      "&Copy",  IDC_LOG_COPY,  7, 193, 60, 16
+    PUSHBUTTON      "C&lear", IDC_LOG_CLEAR, 71, 193, 60, 16
+    DEFPUSHBUTTON   "Close",  IDOK,         323, 193, 50, 16
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// System audio block
+
+IDD_BLOCK_SYSTEM DIALOGEX 0, 0, 300, 308
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "System Audio Block"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "Capture what is playing on this &device:", -1, 7, 7, 190, 9
+    COMBOBOX        IDC_DEV_COMBO, 7, 19, 190, 200,
+                    CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    PUSHBUTTON      "Re&fresh", IDC_BTN_REFRESH, 203, 18, 60, 16
+    LTEXT           "&Exclude these applications:", -1, 7, 42, 286, 9
+    CONTROL         "", IDC_SYS_EXCLUDE, WC_LISTVIEW,
+                    LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_BORDER |
+                    WS_TABSTOP | WS_GROUP, 7, 54, 286, 108
+    PUSHBUTTON      "Add A&pplication...", IDC_SYS_ADD, 7, 166, 90, 16
+    LTEXT           "", IDC_SYS_NOTE, 7, 188, 286, 42
+    LTEXT           "&Volume:", -1, 7, 234, 190, 9
+    CONTROL         "", IDC_VOL_SLIDER, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 246, 190, 22
+    LTEXT           "100%", IDC_VOL_TEXT, 203, 252, 60, 9
+    CONTROL         "Block e&nabled", IDC_BLOCK_ENABLED, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 272, 200, 12
+    PUSHBUTTON      "&Apply",  IDC_APPLY, 129, 286, 50, 16
+    DEFPUSHBUTTON   "OK",     IDOK,     186, 286, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 243, 286, 50, 16
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// Settings
+
+IDD_SETTINGS DIALOGEX 0, 0, 280, 300
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "FastRoute Settings"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "FastRoute hides to the notification area with Ctrl+H or the Hide to Tray menu item. This is the key that brings it back, and it works from any application.",
+                    -1, 7, 7, 266, 26
+    CONTROL         "&Use a global show and hide hotkey", IDC_HK_ENABLED, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 37, 266, 12
+    CONTROL         "&Ctrl", IDC_HK_CTRL, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 14, 55, 60, 12
+    CONTROL         "&Alt", IDC_HK_ALT, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 80, 55, 60, 12
+    CONTROL         "&Shift", IDC_HK_SHIFT, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 146, 55, 60, 12
+    CONTROL         "&Windows", IDC_HK_WIN, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 212, 55, 60, 12
+    LTEXT           "&Key, type its name:", -1, 14, 76, 110, 9
+    EDITTEXT        IDC_HK_KEY, 128, 74, 130, 14, ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT           "", IDC_HK_NOTE, 14, 96, 259, 44
+    LTEXT           "&Plugin folders, searched for CLAP and VST3 effects:",
+                    IDC_PLUG_LABEL, 7, 146, 266, 9
+    LISTBOX         IDC_PLUG_LIST, 7, 158, 200, 58,
+                    LBS_NOTIFY | LBS_HASSTRINGS | WS_VSCROLL | WS_HSCROLL |
+                    WS_TABSTOP | WS_BORDER | WS_GROUP
+    PUSHBUTTON      "A&dd...",  IDC_PLUG_ADD,    213, 158, 60, 16
+    PUSHBUTTON      "&Remove",  IDC_PLUG_REMOVE, 213, 178, 60, 16
+    PUSHBUTTON      "Sca&n",    IDC_PLUG_SCAN,   213, 198, 60, 16
+    LTEXT           "", IDC_PLUG_FOUND, 7, 220, 266, 18
+    LTEXT           "Default &folder for new Recorder blocks (leave empty for the Music folder):",
+                    IDC_SET_REC_LABEL, 7, 242, 266, 18
+    EDITTEXT        IDC_SET_REC_FOLDER, 7, 262, 200, 14, ES_AUTOHSCROLL | WS_TABSTOP
+    PUSHBUTTON      "Brows&e...", IDC_SET_REC_BROWSE, 213, 261, 60, 16
+    DEFPUSHBUTTON   "OK",     IDOK,     166, 280, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 223, 280, 50, 16
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// A hotkey for one session or one block
+
+IDD_HOTKEY DIALOGEX 0, 0, 280, 206
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Hotkey"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "", IDC_HK_WHAT, 7, 7, 266, 18
+    CONTROL         "&Use a hotkey", IDC_HK_ENABLED, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 29, 266, 12
+    CONTROL         "&Ctrl", IDC_HK_CTRL, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 14, 47, 60, 12
+    CONTROL         "&Alt", IDC_HK_ALT, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 80, 47, 60, 12
+    CONTROL         "&Shift", IDC_HK_SHIFT, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 146, 47, 60, 12
+    CONTROL         "&Windows", IDC_HK_WIN, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 212, 47, 60, 12
+    LTEXT           "&Key, type its name:", -1, 14, 68, 110, 9
+    EDITTEXT        IDC_HK_KEY, 128, 66, 130, 14, ES_AUTOHSCROLL | WS_TABSTOP
+    CONTROL         "Works in an&y application", IDC_HK_SCOPE_GLOBAL, "Button",
+                    BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP, 14, 86, 259, 12
+    CONTROL         "Only while a Fast&Route window is in front",
+                    IDC_HK_SCOPE_WINDOW, "Button",
+                    BS_AUTORADIOBUTTON | WS_TABSTOP, 14, 100, 259, 12
+    LTEXT           "", IDC_HK_NOTE, 14, 118, 259, 62
+    DEFPUSHBUTTON   "OK",     IDOK,     166, 182, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 223, 182, 50, 16
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// Stream URL block
+
+IDD_BLOCK_STREAM DIALOGEX 0, 0, 300, 210
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Stream URL Block"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "&Stream address:", -1, 7, 7, 286, 9
+    EDITTEXT        IDC_STR_URL, 7, 19, 286, 14, ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT           "", IDC_STR_NOTE, 7, 37, 286, 18
+    LTEXT           "&Buffer:", -1, 7, 63, 50, 9
+    CONTROL         "", IDC_STR_BUFFER, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 60, 57, 160, 22
+    LTEXT           "1000 ms", IDC_STR_BUFFER_TEXT, 226, 63, 67, 9
+    LTEXT           "A bigger buffer rides out a worse connection, and is that much more delay.",
+                    -1, 7, 83, 286, 9
+    CONTROL         "&Reconnect automatically if the stream drops", IDC_STR_RECONNECT,
+                    "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 7, 99, 286, 12
+    LTEXT           "&Wait this long before trying again, in seconds:",
+                    IDC_STR_RETRY_LABEL, 14, 117, 200, 9
+    EDITTEXT        IDC_STR_RETRY, 218, 115, 40, 14,
+                    ES_AUTOHSCROLL | ES_NUMBER | WS_TABSTOP
+    LTEXT           "&Volume:", -1, 7, 137, 190, 9
+    CONTROL         "", IDC_VOL_SLIDER, "msctls_trackbar32",
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 149, 190, 22
+    LTEXT           "100%", IDC_VOL_TEXT, 203, 155, 60, 9
+    CONTROL         "Block e&nabled", IDC_BLOCK_ENABLED, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 174, 200, 12
+    PUSHBUTTON      "&Apply",  IDC_APPLY, 129, 188, 50, 16
+    DEFPUSHBUTTON   "OK",     IDOK,     186, 188, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 243, 188, 50, 16
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// A scheduled event
+
+IDD_SCHEDULE DIALOGEX 0, 0, 320, 296
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Scheduled Event"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "&Session to run:", -1, 7, 7, 306, 9
+    COMBOBOX        IDC_SCH_SESSION, 7, 19, 306, 200,
+                    CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+
+    CONTROL         "Start at a time of &day", IDC_SCH_MODE_TIME, "Button",
+                    BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP, 7, 41, 306, 12
+    LTEXT           "&Hour and minute:", IDC_SCH_TIMELABEL, 18, 59, 90, 9
+    EDITTEXT        IDC_SCH_HOUR, 112, 57, 30, 14, ES_AUTOHSCROLL | ES_NUMBER | WS_TABSTOP
+    EDITTEXT        IDC_SCH_MIN, 148, 57, 30, 14, ES_AUTOHSCROLL | ES_NUMBER | WS_TABSTOP
+
+    CONTROL         "Start &in this many minutes from now", IDC_SCH_MODE_IN, "Button",
+                    BS_AUTORADIOBUTTON | WS_TABSTOP, 7, 77, 306, 12
+    LTEXT           "&Minutes from now:", IDC_SCH_INLABEL, 18, 95, 90, 9
+    EDITTEXT        IDC_SCH_INMIN, 112, 93, 40, 14, ES_AUTOHSCROLL | ES_NUMBER | WS_TABSTOP
+
+    LTEXT           "&Repeat:", -1, 7, 117, 90, 9
+    COMBOBOX        IDC_SCH_REPEAT, 100, 115, 160, 100,
+                    CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "On these days:", IDC_SCH_DOWLABEL, 7, 137, 306, 9
+    CONTROL         "S&un", IDC_SCH_DOW+0, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 10, 149, 40, 12
+    CONTROL         "M&on", IDC_SCH_DOW+1, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 54, 149, 40, 12
+    CONTROL         "&Tue", IDC_SCH_DOW+2, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 98, 149, 40, 12
+    CONTROL         "&Wed", IDC_SCH_DOW+3, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 142, 149, 44, 12
+    CONTROL         "T&hu", IDC_SCH_DOW+4, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 190, 149, 40, 12
+    CONTROL         "&Fri", IDC_SCH_DOW+5, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 234, 149, 40, 12
+    CONTROL         "Sa&t", IDC_SCH_DOW+6, "Button", BS_AUTOCHECKBOX | WS_TABSTOP, 278, 149, 40, 12
+
+    LTEXT           "St&op:", -1, 7, 173, 90, 9
+    COMBOBOX        IDC_SCH_STOP, 100, 171, 160, 100,
+                    CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+    LTEXT           "Hour and m&inute:", IDC_SCH_STOPLABEL, 18, 195, 90, 9
+    EDITTEXT        IDC_SCH_STOPHOUR, 112, 193, 30, 14, ES_AUTOHSCROLL | ES_NUMBER | WS_TABSTOP
+    EDITTEXT        IDC_SCH_STOPMIN, 148, 193, 30, 14, ES_AUTOHSCROLL | ES_NUMBER | WS_TABSTOP
+    LTEXT           "Run for this many minu&tes:", IDC_SCH_AFTERLABEL, 18, 215, 120, 9
+    EDITTEXT        IDC_SCH_AFTER, 142, 213, 40, 14, ES_AUTOHSCROLL | ES_NUMBER | WS_TABSTOP
+
+    CONTROL         "Remo&ve this event once it has run", IDC_SCH_SINGLE, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 237, 306, 12
+    CONTROL         "Event &enabled", IDC_SCH_ENABLED, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 253, 306, 12
+    DEFPUSHBUTTON   "OK",     IDOK,     206, 272, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 263, 272, 50, 16
+END

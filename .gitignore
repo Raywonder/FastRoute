@@ -1,0 +1,13 @@
+# The CMake build tree, which also holds every fetched dependency and the
+# sessions.json of whatever has been run from it.
+build/
+
+# Release zips. These belong on a releases page rather than in the history.
+dist/
+
+# Visual Studio's own leavings.
+.vs/
+*.user
+*.suo
+*.aps
+out/
