@@ -50,7 +50,10 @@ jobs:
           restore-keys: build-${{ runner.os }}-
 
       - name: Configure
-        run: cmake -S . -B build -G "Visual Studio 17 2022" -A x64
+        # No -G: the runner image moves to a newer Visual Studio from
+        # time to time, and naming one that is not there fails before it
+        # builds anything. CMake picks the newest it finds.
+        run: cmake -S . -B build -A x64
 
       - name: Build
         run: cmake --build build --config Release

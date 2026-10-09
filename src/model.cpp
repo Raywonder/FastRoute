@@ -111,6 +111,17 @@ std::wstring PanText(int pan)
     return pan < 0 ? FormatW(L"left %d", -pan) : FormatW(L"right %d", pan);
 }
 
+const wchar_t* UpdateCheckName(int c)
+{
+    switch (c)
+    {
+    case UC_STARTUP: return L"when FastRoute starts";
+    case UC_HOURLY:  return L"when it starts, and every hour";
+    case UC_DAILY:   return L"when it starts, and every day";
+    default:         return L"never";
+    }
+}
+
 const wchar_t* NetProtocolName(int p)
 {
     return (p == NP_VBAN) ? L"VBAN" : L"FastRoute";
@@ -922,6 +933,8 @@ void SessionStore::Load()
         settings.showHide.vk      = set->AsInt(L"hotkeyVk", 'R');
 
         settings.recFolder = set->AsString(L"recFolder");
+        settings.updateCheck = set->AsInt(L"updateCheck", UC_NEVER);
+        settings.updateSilent = set->AsBool(L"updateSilent", false);
 
         const Json* paths = set->Find(L"pluginPaths");
         if (paths && paths->IsArray())
@@ -1191,6 +1204,8 @@ bool SessionStore::Save(std::wstring* err) const
     set.Set(L"hotkeyVk", Json::Num(settings.showHide.vk));
 
     set.Set(L"recFolder", Json::Str(settings.recFolder));
+    set.Set(L"updateCheck", Json::Num(settings.updateCheck));
+    set.Set(L"updateSilent", Json::Bool(settings.updateSilent));
 
     Json paths = Json::Arr();
     for (const std::wstring& p : settings.pluginPaths) paths.Push(Json::Str(p));

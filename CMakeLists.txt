@@ -40,6 +40,7 @@ add_executable(FastRoute WIN32
     src/ui_plugin.cpp
     src/tray.cpp
     src/scheduler.cpp
+    src/updater.cpp
     src/audio/devices.cpp
     src/audio/normalise.cpp
     src/audio/buffer.cpp

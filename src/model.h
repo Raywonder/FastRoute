@@ -577,6 +577,18 @@ struct PluginEntry
     std::wstring Label() const;    // "TAL Reverb 4 (VST3)"
 };
 
+// How often FastRoute looks for a new build of itself. Stored in the settings
+// file, so the order is fixed once written.
+enum UpdateCheck
+{
+    UC_NEVER = 0,
+    UC_STARTUP = 1,
+    UC_HOURLY = 2,
+    UC_DAILY = 3,
+};
+static const int kUpdateCheckCount = 4;
+const wchar_t* UpdateCheckName(int c);
+
 struct AppSettings
 {
     // Shows FastRoute again once it is hidden. It has to be global: when the
@@ -594,6 +606,16 @@ struct AppSettings
     // resort but a poor place to keep going back to if the recordings belong
     // somewhere else. Empty means no default, and the fallback stands.
     std::wstring recFolder;
+
+    // Looking for a new build of FastRoute. Off by default: a program that
+    // phones home without being asked should be asked first, and the Settings
+    // dialog is where to ask.
+    int  updateCheck = UC_NEVER;
+    // Whether a check that finds something gets on with it. Without this a
+    // scheduled check asks before downloading, which is the right default -
+    // an update that restarts the program in the middle of a recording would
+    // be a poor surprise.
+    bool updateSilent = false;
 };
 
 // ---------------------------------------------------------------------------

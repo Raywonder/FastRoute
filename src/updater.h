@@ -1,0 +1,62 @@
+#pragma once
+#include "app.h"
+
+// ---------------------------------------------------------------------------
+// Updating itself
+//
+// FastRoute is portable: a folder with the exe in it and the settings beside
+// it, which is also what makes updating simple. The continuous build replaces
+// one release, tagged "latest", on every push, and this looks at that release
+// and unpacks it over the folder it is running from. Nothing is installed and
+// nothing in the registry is touched.
+//
+// Settings are left alone by that, because they are not in the zip: the only
+// things it contains are the exe and the documentation, so sessions.json and
+// the rest survive being copied over.
+//
+// Every call that talks to the network blocks, and none of them may be made
+// from the UI thread. ShowCheckForUpdates is the exception - it is the UI
+// thread's entry point and starts its own.
+// ---------------------------------------------------------------------------
+
+struct UpdateInfo
+{
+    bool available = false;
+    std::wstring version;      // what the release says it is
+    std::wstring commit;       // and which commit it was built from
+    std::wstring zipUrl;
+    std::wstring notes;
+    std::wstring error;        // empty unless the check itself failed
+};
+
+// What the server has. Blocking; call from a background thread.
+UpdateInfo CheckForUpdates();
+
+// Fetches it to a temporary file. The callback is given bytes so far and the
+// total, which is zero when the server did not say, and returns false to give
+// up. Blocking.
+using UpdateProgressFn = std::function<bool(unsigned long long, unsigned long long)>;
+bool DownloadUpdate(const std::wstring& url, UpdateProgressFn progress,
+                    std::wstring* err);
+
+// Unpacks what was downloaded over this folder and restarts. This does not
+// return: it asks the application to close so that the exe can be replaced.
+void ApplyUpdate();
+
+// The UI thread's way in. Checks on a thread of its own and then, on the UI
+// thread, either offers the update or says there is none - except when silent,
+// which says nothing unless there is something to say.
+void ShowCheckForUpdates(HWND parent, bool silent);
+
+// Starts and stops the timer that honours the update setting. Called when the
+// program starts and whenever the settings change.
+void StartUpdateChecks(HWND owner);
+void StopUpdateChecks();
+
+// Runs the check the settings ask for on startup, if they ask for one.
+void CheckForUpdatesOnStartup(HWND owner);
+
+// What this build is, for the About dialog and for comparing against a
+// release. The commit is empty when the build did not know its own.
+std::wstring RunningVersion();
+std::wstring RunningCommit();
