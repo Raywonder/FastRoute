@@ -1,5 +1,6 @@
 #include "app.h"
 #include "updater.h"
+#include "audio/asiodev.h"
 #include <map>
 #include <memory>
 
@@ -169,6 +170,10 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, LPWSTR, int)
         return 1;
     }
     ShowWindow(g_mainDlg, SW_SHOW);
+
+    // An ASIO driver is handed a window when it starts, and some of them use
+    // it. Set before any session can open one.
+    SetAsioHostWindow(g_mainDlg);
 
     RunStartupSessions();
 

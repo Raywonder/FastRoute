@@ -29,6 +29,12 @@
 // using it.
 // ---------------------------------------------------------------------------
 
+// The window a driver is given when it starts. On Windows an ASIO driver is
+// handed a window handle and some of them use it - as the owner of a dialog
+// they put up, as a rule - so passing nothing is asking for trouble from a
+// driver that does not check. Set once, when there is a main window to give.
+void SetAsioHostWindow(HWND host);
+
 // Every ASIO driver registered on this machine, by the name it registered
 // under. Reads the registry only: no driver is loaded and no device opened.
 std::vector<std::wstring> EnumAsioDrivers();

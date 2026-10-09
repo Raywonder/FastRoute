@@ -6,6 +6,15 @@
 #include <asiodrivers.h>
 #include <asio.h>
 
+// Declared in asiodrivers.cpp and in no header, so it is declared here. It
+// has to be this rather than an AsioDrivers of our own: it is what creates
+// the SDK's global asioDrivers pointer, and ASIOExit dereferences that
+// pointer unconditionally. Loading a driver through a private instance left
+// the global null, so the first successful close took the process down with
+// it - and only a successful one, because a driver that fails ASIOInit has
+// theAsioDriver zeroed by ASIOInit itself and never reaches the dereference.
+extern bool loadAsioDriver(char* name);
+
 #include <atomic>
 #include <cmath>
 #include <mutex>
@@ -44,6 +53,14 @@ std::string Narrow(const std::wstring& s)
 }
 
 }  // namespace
+
+namespace {
+// Not inside Dev: it outlives any one open driver, and it is set before the
+// first one is opened.
+HWND g_host = nullptr;
+}
+
+void SetAsioHostWindow(HWND host) { g_host = host; }
 
 std::vector<std::wstring> EnumAsioDrivers()
 {
@@ -86,7 +103,6 @@ namespace {
 // before Start and not touched again until after Stop.
 struct Dev
 {
-    AsioDrivers drivers;
     bool loaded = false;
     bool buffers = false;
     bool running = false;
@@ -466,7 +482,7 @@ bool AsioDevice::Open(const std::wstring& driver, int wantRate, std::wstring* er
     }
 
     std::string narrow = Narrow(driver);
-    if (narrow.empty() || !g_dev.drivers.loadDriver(&narrow[0]))
+    if (narrow.empty() || !loadAsioDriver(&narrow[0]))
     {
         if (err) *err = FormatW(
             L"%s could not be loaded. It may have been uninstalled, or it may "
@@ -479,7 +495,7 @@ bool AsioDevice::Open(const std::wstring& driver, int wantRate, std::wstring* er
 
     ASIODriverInfo info = {};
     info.asioVersion = 2;
-    info.sysRef = nullptr;
+    info.sysRef = g_host;
     ASIOError e = ASIOInit(&info);
     if (e != ASE_OK)
     {
@@ -493,6 +509,28 @@ bool AsioDevice::Open(const std::wstring& driver, int wantRate, std::wstring* er
     {
         if (err) *err = FormatW(L"%s would not say how many channels it has: %s.",
                                 driver.c_str(), ErrText(e));
+        CloseLocked();
+        return false;
+    }
+
+    // 1024 is far past any real interface and well short of a number that
+    // would do damage as a buffer size.
+    const long kMaxChannels = 1024;
+    if (g_dev.inChannels < 0 || g_dev.outChannels < 0 ||
+        g_dev.inChannels > kMaxChannels || g_dev.outChannels > kMaxChannels)
+    {
+        if (err) *err = FormatW(
+            L"%s reports %ld inputs and %ld outputs, which cannot be right. "
+            L"FastRoute will not use it rather than act on that.",
+            driver.c_str(), g_dev.inChannels, g_dev.outChannels);
+        CloseLocked();
+        return false;
+    }
+    if (g_dev.inChannels == 0 && g_dev.outChannels == 0)
+    {
+        if (err) *err = FormatW(
+            L"%s reports no inputs and no outputs, so there is nothing to "
+            L"use it for. It may need its hardware connected.", driver.c_str());
         CloseLocked();
         return false;
     }
@@ -521,8 +559,20 @@ bool AsioDevice::Open(const std::wstring& driver, int wantRate, std::wstring* er
         CloseLocked();
         return false;
     }
-    // The driver's own preference, always. Buffer size is an ASIO control
-    // panel setting and belongs there, where every other host leaves it.
+    // A buffer this big is not a setting, it is a wrong answer, and it would
+    // be believed twice over: once for the driver's own buffers and again for
+    // the scratch the callback converts through.
+    if (preferred > 1 << 20)
+    {
+        if (err) *err = FormatW(
+            L"%s asks for a buffer of %ld frames, which cannot be right. "
+            L"FastRoute will not use it rather than act on that.",
+            driver.c_str(), preferred);
+        CloseLocked();
+        return false;
+    }
+    // Otherwise the driver's own preference, always. Buffer size is an ASIO
+    // control panel setting and belongs there, where other hosts leave it.
     g_dev.bufferFrames = preferred;
 
     // Channel names and formats, which also settles whether the formats are
@@ -669,8 +719,9 @@ void CloseLocked()
     }
     if (g_dev.loaded)
     {
+        // ASIOExit releases the driver through the global asioDrivers, so
+        // removing it again here would be a second release of the same thing.
         ASIOExit();
-        g_dev.drivers.removeCurrentDriver();
         g_dev.loaded = false;
     }
     g_dev.name.clear();
