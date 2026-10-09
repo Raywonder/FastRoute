@@ -1,6 +1,7 @@
-# The tree is CRLF throughout, since it is a Windows program edited with
-# Windows tools. Normalising on the way in keeps the history from churning
-# when somebody checks it out somewhere else.
+# Normalising on the way in keeps the history from churning when somebody
+# checks it out somewhere else: git stores LF whatever a given editor wrote.
+# What lands in a working tree is then up to that checkout, so do not assume
+# either one when editing a file in place - look at what the file already has.
 * text=auto
 
 # And the icon is not text at all.

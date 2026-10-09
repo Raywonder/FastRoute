@@ -19,6 +19,7 @@ const std::vector<BlockType>& AllBlockTypes()
         { BT_INPUT_SYSTEM,  L"System Audio",    L"Input Blocks",  BlockKind::Input  },
         { BT_INPUT_STREAM,  L"Stream URL",      L"Input Blocks",  BlockKind::Input  },
         { BT_INPUT_NET,     L"Net Receive",     L"Input Blocks",  BlockKind::Input  },
+        { BT_INPUT_ASIO,    L"ASIO Input",      L"Input Blocks",  BlockKind::Input  },
         // The effects are listed alphabetically, which is the order the blocks
         // library tree shows them in. Keep a new one in its place.
         { BT_FX_EQ10,       L"10 Band EQ",      L"Built-in Effects", BlockKind::Effect },
@@ -41,6 +42,7 @@ const std::vector<BlockType>& AllBlockTypes()
         { BT_OUTPUT_DEVICE, L"Output Device",   L"Output Blocks", BlockKind::Output },
         { BT_OUT_RECORDER,  L"Recorder",        L"Output Blocks", BlockKind::Output },
         { BT_OUT_NET,       L"Net Send",        L"Output Blocks", BlockKind::Output },
+        { BT_OUT_ASIO,      L"ASIO Output",     L"Output Blocks", BlockKind::Output },
     };
     return types;
 }
@@ -308,6 +310,8 @@ bool Block::IsConfigured() const
     if (typeId == BT_OUT_RECORDER) return true;   // blank folder means the Music folder
     if (typeId == BT_INPUT_DEVICE || typeId == BT_OUTPUT_DEVICE ||
         typeId == BT_INPUT_SYSTEM) return true;   // "" == default device
+    // There is no default ASIO driver to fall back on, so one has to be named.
+    if (typeId == BT_INPUT_ASIO || typeId == BT_OUT_ASIO) return !deviceId.empty();
     return true;
 }
 
@@ -423,6 +427,23 @@ std::wstring Block::ParamSummary() const
                        gateLookaheadMs > 0
                            ? FormatW(L"%d ms lookahead", gateLookaheadMs).c_str()
                            : L"no lookahead");
+    }
+    if (typeId == BT_INPUT_ASIO || typeId == BT_OUT_ASIO)
+    {
+        // The driver's name first, because that is which interface this is,
+        // and then the pair of channels. Channels are numbered from one here
+        // and from zero inside: every interface is labelled from one on its
+        // front panel, and the front panel is what somebody is looking at.
+        if (deviceId.empty())
+            return L"no ASIO driver chosen yet; press Enter to pick one";
+        const bool in = (typeId == BT_INPUT_ASIO);
+        const int l = in ? asioInLeft : asioOutLeft;
+        const int r = in ? asioInRight : asioOutRight;
+        std::wstring chans = (l == r)
+            ? FormatW(L"channel %d, the same on both sides", l + 1)
+            : FormatW(L"channels %d and %d", l + 1, r + 1);
+        return FormatW(L"%s, %s, volume %d%%", deviceId.c_str(), chans.c_str(),
+                       volumePct);
     }
     if (typeId == BT_INPUT_NET)
     {
@@ -1038,6 +1059,10 @@ void SessionStore::Load()
                 // hash, and one above two billion read as an int comes back
                 // negative, which would lose the sender somebody chose.
                 b.netSourceId   = (unsigned int)jb.AsNumberAt(L"netSourceId", 0.0);
+                b.asioInLeft    = jb.AsInt(L"asioInLeft", 0);
+                b.asioInRight   = jb.AsInt(L"asioInRight", 1);
+                b.asioOutLeft   = jb.AsInt(L"asioOutLeft", 0);
+                b.asioOutRight  = jb.AsInt(L"asioOutRight", 1);
                 b.pitchSemitones = jb.AsInt(L"pitchSemitones", 0);
                 b.pitchCents     = jb.AsInt(L"pitchCents", 0);
                 b.pitchQuality   = jb.AsInt(L"pitchQuality", PQ_BEST);
@@ -1280,10 +1305,21 @@ bool SessionStore::Save(std::wstring* err) const
                 jb.Set(L"netTtl", Json::Num(b.netTtl));
             }
             if (b.typeId == BT_INPUT_DEVICE || b.typeId == BT_OUTPUT_DEVICE ||
-                b.typeId == BT_INPUT_SYSTEM)
+                b.typeId == BT_INPUT_SYSTEM || b.typeId == BT_INPUT_ASIO ||
+                b.typeId == BT_OUT_ASIO)
             {
                 jb.Set(L"deviceId", Json::Str(b.deviceId));
                 jb.Set(L"deviceName", Json::Str(b.deviceName));
+            }
+            if (b.typeId == BT_INPUT_ASIO)
+            {
+                jb.Set(L"asioInLeft", Json::Num(b.asioInLeft));
+                jb.Set(L"asioInRight", Json::Num(b.asioInRight));
+            }
+            if (b.typeId == BT_OUT_ASIO)
+            {
+                jb.Set(L"asioOutLeft", Json::Num(b.asioOutLeft));
+                jb.Set(L"asioOutRight", Json::Num(b.asioOutRight));
             }
             if (b.typeId == BT_INPUT_SYSTEM && !b.excludeApps.empty())
             {

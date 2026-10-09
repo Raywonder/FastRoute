@@ -59,6 +59,12 @@ std::wstring Engine::KeyFor(const Block& b)
     }
     if (b.typeId == BT_OUTPUT_DEVICE)
         return L"out|" + b.deviceId;
+    if (b.typeId == BT_INPUT_ASIO)
+        return FormatW(L"asioin|%s|%d|%d", b.deviceId.c_str(), b.asioInLeft,
+                       b.asioInRight);
+    if (b.typeId == BT_OUT_ASIO)
+        return FormatW(L"asioout|%s|%d|%d", b.deviceId.c_str(), b.asioOutLeft,
+                       b.asioOutRight);
     if (b.typeId == BT_INPUT_NET)
     {
         // The buffer depth sizes the ring, and the rest decides which socket
@@ -119,11 +125,23 @@ bool Engine::ApplySession(const Session& s, std::wstring* err, bool* graphIntact
     // A master whose rate differs from the one already running means every
     // stream has to be rebuilt, so hand that case straight to Start().
     std::wstring masterDevice;
+    bool masterIsAsio = false;
     for (const Block& b : s.blocks)
-        if (b.Kind() == BlockKind::Output) { masterDevice = b.deviceId; break; }
+        if (b.Kind() == BlockKind::Output)
+        {
+            masterDevice = b.deviceId;
+            masterIsAsio = (b.typeId == BT_OUT_ASIO);
+            break;
+        }
 
     int wantRate = kDefaultRate;
-    if (!QueryEndpointFormat(masterDevice, true, &wantRate, nullptr))
+    if (masterIsAsio)
+    {
+        // The driver decides, and it is opened to ask. A driver that cannot
+        // be asked leaves the default, and starting it will then say why.
+        if (!AsioQueryRate(masterDevice, &wantRate)) wantRate = kDefaultRate;
+    }
+    else if (!QueryEndpointFormat(masterDevice, true, &wantRate, nullptr))
         wantRate = kDefaultRate;
 
     if (!m_nodes.empty() && wantRate != m_rate)
@@ -263,6 +281,16 @@ bool Engine::ApplySession(const Session& s, std::wstring* err, bool* graphIntact
         else if (b.typeId == BT_OUTPUT_DEVICE)
         {
             n->renderer.reset(new DeviceRenderer());   // started once the master is known
+        }
+        else if (b.typeId == BT_INPUT_ASIO)
+        {
+            n->capture = MakeAsioCapture(b, m_rate);
+            if (!n->capture->Start(err)) return false;
+        }
+        else if (b.typeId == BT_OUT_ASIO)
+        {
+            n->renderer = MakeAsioRenderer();          // started with the rest
+            n->renderer->Configure(b);
         }
         else if (b.Kind() == BlockKind::Effect)
         {
@@ -419,6 +447,10 @@ void Engine::Stop()
     for (std::unique_ptr<Node>& n : retired)
         if (n && n->rec) n->rec->Stop();     // flush and close the files
     retired.clear();
+    // The nodes are gone, so whatever was holding the ASIO driver has let go
+    // of it; this closes it. A driver left open is one no other program can
+    // use, and somebody who stops a session expects their interface back.
+    AsioReleaseIfIdle();
     m_running = false;
 }
 
@@ -472,7 +504,7 @@ void Engine::GetStatus(Status* st)
     }
     st->fxMs = (int)((long long)fxFrames * 1000 / m_rate);
 
-    DeviceRenderer* clock = (m_master < m_nodes.size()) ? m_nodes[m_master]->renderer.get()
+    Renderer* clock = (m_master < m_nodes.size()) ? m_nodes[m_master]->renderer.get()
                                                         : m_clock.get();
     if (!clock) return;
 

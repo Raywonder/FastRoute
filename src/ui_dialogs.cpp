@@ -2,6 +2,7 @@
 #include "audio/net.h"
 #include "updater.h"
 #include "audio/netcodec.h"
+#include "audio/asiodev.h"
 #include "plugins/plugins.h"
 #include <thread>
 #include <algorithm>
@@ -2769,6 +2770,262 @@ static INT_PTR CALLBACK LimitDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
     return FALSE;
 }
 
+// ---------------------------------------------------------------------------
+// ASIO blocks
+//
+// One dialog for both directions, because the questions are the same and only
+// the word changes: which driver, and which two of its channels.
+//
+// The channel lists cannot be filled without opening the driver, and opening
+// a driver takes the audio hardware from whatever is using it. So nothing is
+// opened when the dialog appears - only when somebody picks a driver, which
+// is the moment they have asked for the question to be answered. Until then
+// the lists offer plain numbers, which is also what they fall back to when
+// the driver turns out to be busy.
+// ---------------------------------------------------------------------------
+struct AsioCtx
+{
+    Block* block;
+    bool   input;
+    std::vector<std::wstring> drivers;
+    AsioFacts facts;
+};
+
+// Channels are numbered from one here and from zero inside. Every interface is
+// labelled from one on its front panel, and the front panel is the thing
+// somebody is looking at while they use this.
+static void FillAsioChannels(HWND dlg, AsioCtx* ctx)
+{
+    const std::vector<std::wstring>& names =
+        ctx->input ? ctx->facts.inNames : ctx->facts.outNames;
+
+    const int wantL = ctx->input ? ctx->block->asioInLeft : ctx->block->asioOutLeft;
+    const int wantR = ctx->input ? ctx->block->asioInRight : ctx->block->asioOutRight;
+
+    for (int side = 0; side < 2; ++side)
+    {
+        const int id = side ? IDC_AS_RIGHT : IDC_AS_LEFT;
+        const int want = side ? wantR : wantL;
+        HWND cb = GetDlgItem(dlg, id);
+        SendMessageW(cb, CB_RESETCONTENT, 0, 0);
+
+        // With no driver opened there is nothing to say how many channels
+        // exist, so a plain stereo pair is offered and a wider interface
+        // fills the list properly the moment its driver is picked.
+        const int count = names.empty() ? 2 : (int)names.size();
+        for (int i = 0; i < count; ++i)
+        {
+            std::wstring label = names.empty()
+                ? FormatW(L"Channel %d", i + 1)
+                : FormatW(L"%d. %s", i + 1, names[(size_t)i].c_str());
+            SendMessageW(cb, CB_ADDSTRING, 0, (LPARAM)label.c_str());
+        }
+        const int sel = (want >= 0 && want < count) ? want : (side ? 1 : 0);
+        SendMessageW(cb, CB_SETCURSEL, sel < count ? sel : 0, 0);
+    }
+}
+
+static std::wstring AsioDriverAt(AsioCtx* ctx, HWND dlg)
+{
+    const int sel = (int)SendDlgItemMessageW(dlg, IDC_AS_DRIVER, CB_GETCURSEL, 0, 0);
+    if (sel <= 0) return std::wstring();          // item 0 is "(none chosen)"
+    const size_t i = (size_t)(sel - 1);
+    return (i < ctx->drivers.size()) ? ctx->drivers[i] : std::wstring();
+}
+
+// What the driver had to say, in a line somebody can read. This is the only
+// place the rate and the buffer appear, and both matter: the rate because an
+// ASIO driver will not be talked out of its own, and the buffer because it is
+// the session's latency and is changed in the driver's panel, not here.
+static void UpdateAsioNote(HWND dlg, AsioCtx* ctx)
+{
+    const std::wstring driver = AsioDriverAt(ctx, dlg);
+    if (driver.empty())
+    {
+        SetDlgItemTextW(dlg, IDC_AS_NOTE,
+            L"No driver chosen. Unlike a Windows audio device there is no "
+            L"default ASIO driver to fall back on, so this block will not "
+            L"start until one is picked.");
+        EnableWindow(GetDlgItem(dlg, IDC_AS_PANEL), FALSE);
+        return;
+    }
+
+    EnableWindow(GetDlgItem(dlg, IDC_AS_PANEL), TRUE);
+
+    if (!ctx->facts.ok)
+    {
+        SetDlgItemTextW(dlg, IDC_AS_NOTE, ctx->facts.why.c_str());
+        return;
+    }
+
+    const size_t have = ctx->input ? ctx->facts.inNames.size()
+                                   : ctx->facts.outNames.size();
+    if (have == 0)
+    {
+        SetDlgItemTextW(dlg, IDC_AS_NOTE, FormatW(
+            L"%s has no %s, so there is nothing for this block to use. It has "
+            L"%d inputs and %d outputs.", driver.c_str(),
+            ctx->input ? L"inputs" : L"outputs",
+            (int)ctx->facts.inNames.size(),
+            (int)ctx->facts.outNames.size()).c_str());
+        return;
+    }
+
+    const double ms = ctx->facts.rate > 0
+        ? (double)ctx->facts.bufferFrames * 1000.0 / (double)ctx->facts.rate : 0.0;
+
+    SetDlgItemTextW(dlg, IDC_AS_NOTE, FormatW(
+        L"%s: %d inputs, %d outputs, running at %d Hz with a %d frame buffer, "
+        L"which is %.1f ms. Both the buffer size and the sample rate belong to "
+        L"the driver and are changed in its own control panel. A session takes "
+        L"its rate from this driver when an ASIO output is its first output "
+        L"block; otherwise the driver has to be set to the rate the session is "
+        L"already using.",
+        driver.c_str(), (int)ctx->facts.inNames.size(),
+        (int)ctx->facts.outNames.size(), ctx->facts.rate,
+        ctx->facts.bufferFrames, ms).c_str());
+}
+
+static void FillAsioDrivers(HWND dlg, AsioCtx* ctx, const std::wstring& keep)
+{
+    HWND cb = GetDlgItem(dlg, IDC_AS_DRIVER);
+    SendMessageW(cb, CB_RESETCONTENT, 0, 0);
+
+    // Reading the registry only. No driver is loaded by this.
+    ctx->drivers = EnumAsioDrivers();
+
+    SendMessageW(cb, CB_ADDSTRING, 0, (LPARAM)L"(none chosen)");
+    int select = 0;
+    for (size_t i = 0; i < ctx->drivers.size(); ++i)
+    {
+        SendMessageW(cb, CB_ADDSTRING, 0, (LPARAM)ctx->drivers[i].c_str());
+        if (!keep.empty() && _wcsicmp(ctx->drivers[i].c_str(), keep.c_str()) == 0)
+            select = (int)i + 1;
+    }
+
+    // A driver named in a saved session that is no longer installed is kept in
+    // the list rather than silently dropped, because the block still refers to
+    // it and somebody should be able to see what is missing.
+    if (select == 0 && !keep.empty())
+    {
+        ctx->drivers.push_back(keep);
+        SendMessageW(cb, CB_ADDSTRING, 0,
+                     (LPARAM)FormatW(L"%s (not installed)", keep.c_str()).c_str());
+        select = (int)ctx->drivers.size();
+    }
+
+    SendMessageW(cb, CB_SETCURSEL, select, 0);
+}
+
+static INT_PTR CALLBACK AsioDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
+{
+    AsioCtx* ctx = reinterpret_cast<AsioCtx*>(GetWindowLongPtrW(dlg, DWLP_USER));
+
+    switch (msg)
+    {
+    case WM_INITDIALOG:
+    {
+        ReverseSliderKeys(dlg);
+        ctx = reinterpret_cast<AsioCtx*>(lp);
+        SetWindowLongPtrW(dlg, DWLP_USER, lp);
+        SetWindowTextW(dlg, ctx->input ? L"ASIO Input Block" : L"ASIO Output Block");
+        SetDlgItemTextW(dlg, IDC_AS_LEFT_LABEL,
+                        ctx->input ? L"&Left input channel:" : L"&Left output channel:");
+        SetDlgItemTextW(dlg, IDC_AS_RIGHT_LABEL,
+                        ctx->input ? L"&Right input channel:" : L"&Right output channel:");
+
+        FillAsioDrivers(dlg, ctx, ctx->block->deviceId);
+        // The driver named in the block is asked about straight away, because
+        // it is already this block's driver: nothing is being taken that the
+        // block was not going to take anyway.
+        if (!ctx->block->deviceId.empty())
+            AsioQueryDriver(ctx->block->deviceId, &ctx->facts);
+        FillAsioChannels(dlg, ctx);
+        UpdateAsioNote(dlg, ctx);
+
+        CheckDlgButton(dlg, IDC_BLOCK_ENABLED,
+                       ctx->block->enabled ? BST_CHECKED : BST_UNCHECKED);
+        SetupVolumeSlider(dlg, ctx->block->volumePct);
+        return TRUE;
+    }
+
+    case WM_HSCROLL:
+        OnVolumeScroll(dlg);
+        return TRUE;
+
+    case WM_COMMAND:
+        switch (LOWORD(wp))
+        {
+        case IDC_AS_DRIVER:
+            if (HIWORD(wp) == CBN_SELCHANGE)
+            {
+                const std::wstring driver = AsioDriverAt(ctx, dlg);
+                ctx->facts = AsioFacts();
+                if (!driver.empty()) AsioQueryDriver(driver, &ctx->facts);
+                // A different interface has different channels, so the
+                // choices start again rather than keeping numbers that meant
+                // something on the last one.
+                if (ctx->input) { ctx->block->asioInLeft = 0; ctx->block->asioInRight = 1; }
+                else            { ctx->block->asioOutLeft = 0; ctx->block->asioOutRight = 1; }
+                FillAsioChannels(dlg, ctx);
+                UpdateAsioNote(dlg, ctx);
+            }
+            return TRUE;
+
+        case IDC_AS_REFRESH:
+            FillAsioDrivers(dlg, ctx, AsioDriverAt(ctx, dlg));
+            UpdateAsioNote(dlg, ctx);
+            SetFocus(GetDlgItem(dlg, IDC_AS_DRIVER));
+            return TRUE;
+
+        case IDC_AS_PANEL:
+        {
+            const std::wstring driver = AsioDriverAt(ctx, dlg);
+            if (driver.empty()) return TRUE;
+            AsioShowControlPanel(driver, dlg);
+            // The buffer size or the rate may be different now, so what the
+            // note says is asked again rather than left as it was.
+            AsioQueryDriver(driver, &ctx->facts);
+            UpdateAsioNote(dlg, ctx);
+            return TRUE;
+        }
+
+        case IDC_APPLY:
+        case IDOK:
+        {
+            const std::wstring driver = AsioDriverAt(ctx, dlg);
+            ctx->block->deviceId = driver;
+            ctx->block->deviceName = driver;   // an ASIO driver's name is its id
+
+            const int l = (int)SendDlgItemMessageW(dlg, IDC_AS_LEFT, CB_GETCURSEL, 0, 0);
+            const int r = (int)SendDlgItemMessageW(dlg, IDC_AS_RIGHT, CB_GETCURSEL, 0, 0);
+            if (ctx->input)
+            {
+                ctx->block->asioInLeft = (l >= 0) ? l : 0;
+                ctx->block->asioInRight = (r >= 0) ? r : 1;
+            }
+            else
+            {
+                ctx->block->asioOutLeft = (l >= 0) ? l : 0;
+                ctx->block->asioOutRight = (r >= 0) ? r : 1;
+            }
+
+            ctx->block->enabled = IsDlgButtonChecked(dlg, IDC_BLOCK_ENABLED) == BST_CHECKED;
+            ctx->block->volumePct = ReadVolumeSlider(dlg);
+
+            FinishBlockEdit(dlg, LOWORD(wp));
+            return TRUE;
+        }
+
+        case IDCANCEL:
+            EndDialog(dlg, IDCANCEL);
+            return TRUE;
+        }
+        return FALSE;
+    }
+    return FALSE;
+}
+
 bool EditBlockParams(HWND parent, Block& b)
 {
     if (b.typeId == BT_INPUT_APP)
@@ -2787,6 +3044,12 @@ bool EditBlockParams(HWND parent, Block& b)
         SysCtx ctx{ &b, {}, {} };
         return DialogBoxParamW(g_inst, MAKEINTRESOURCEW(IDD_BLOCK_SYSTEM), parent,
                                SystemDlgProc, reinterpret_cast<LPARAM>(&ctx)) == IDOK;
+    }
+    if (b.typeId == BT_INPUT_ASIO || b.typeId == BT_OUT_ASIO)
+    {
+        AsioCtx ctx{ &b, b.typeId == BT_INPUT_ASIO, {}, {} };
+        return DialogBoxParamW(g_inst, MAKEINTRESOURCEW(IDD_BLOCK_ASIO), parent,
+                               AsioDlgProc, reinterpret_cast<LPARAM>(&ctx)) == IDOK;
     }
     if (b.typeId == BT_INPUT_DEVICE || b.typeId == BT_OUTPUT_DEVICE)
     {

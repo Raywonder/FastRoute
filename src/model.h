@@ -48,6 +48,7 @@ const BlockType* FindBlockType(const std::wstring& id);
 #define BT_INPUT_SYSTEM L"input.system"
 #define BT_INPUT_STREAM L"input.stream"
 #define BT_INPUT_NET    L"input.net"
+#define BT_INPUT_ASIO   L"input.asio"
 #define BT_EFFECT_GAIN  L"effect.gain"
 #define BT_FX_SPEEX     L"effect.denoise.speex"
 #define BT_FX_RNNOISE   L"effect.denoise.rnnoise"
@@ -69,6 +70,7 @@ const BlockType* FindBlockType(const std::wstring& id);
 #define BT_OUT_RECORDER L"output.recorder"
 #define BT_OUT_NET      L"output.net"
 #define BT_OUTPUT_DEVICE L"output.device"
+#define BT_OUT_ASIO     L"output.asio"
 
 // What an application input block is pointed at. A foreground block needs no
 // process name: it works out its own target, either once or continuously.
@@ -461,6 +463,16 @@ struct Block
     // id, and somebody who picked "Desk mic" yesterday means the thing called
     // Desk mic today.
     unsigned int netSourceId = 0;       // receiving only
+
+    // input.asio and output.asio
+    //
+    // Which driver is in deviceId, as the name it registered under: an ASIO
+    // driver has no endpoint id and its name is the only durable handle on it.
+    // What is here is the pair of channels the stereo bus maps to, and they
+    // are per direction because an interface's third and fourth inputs have
+    // nothing to do with its third and fourth outputs.
+    int asioInLeft = 0,  asioInRight = 1;
+    int asioOutLeft = 0, asioOutRight = 1;
 
     // effect.pitch
     //

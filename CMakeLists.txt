@@ -43,6 +43,7 @@ add_executable(FastRoute WIN32
     src/updater.cpp
     src/audio/devices.cpp
     src/audio/asiodev.cpp
+    src/audio/asioio.cpp
     src/audio/normalise.cpp
     src/audio/buffer.cpp
     src/audio/capture.cpp

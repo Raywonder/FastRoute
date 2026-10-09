@@ -329,6 +329,7 @@ public:
 };
 
 std::unique_ptr<NetSink> MakeNetSink();
+
 // Whether Media Foundation is on this machine at all. It is delay loaded, so
 // nothing may touch it until this says so.
 bool MediaFoundationAvailable();
@@ -341,18 +342,40 @@ bool MediaFoundationAvailable();
 // is buffered between the mix and the endpoint. Any further renderer runs in
 // ring mode and is fed by the master.
 // ---------------------------------------------------------------------------
-class DeviceRenderer
+// What every output has in common, so that the engine can own the clock
+// without caring which of them owns it. A WASAPI endpoint and an ASIO driver
+// are told apart only where they genuinely differ.
+class Renderer
 {
 public:
     using SourceFn = std::function<void(float*, size_t)>;
 
+    virtual ~Renderer() {}
+    // `target` is an endpoint id for a device renderer and a driver name for
+    // an ASIO one. A non-null `source` makes this renderer the master clock;
+    // null puts it in ring mode, fed by whoever is.
+    virtual bool Start(const std::wstring& target, int rate, SourceFn source,
+                       std::wstring* err) = 0;
+    virtual void Stop() = 0;
+    virtual void Write(const float* src, size_t frames) = 0;
+    virtual unsigned BufferFrames() const = 0;
+    virtual unsigned PeriodFrames() const = 0;
+    // Anything that is the block's business rather than the endpoint's -
+    // which two channels of a sixteen channel interface, for instance. Called
+    // before Start. A device renderer has nothing of the sort.
+    virtual void Configure(const Block& b) { (void)b; }
+};
+
+class DeviceRenderer : public Renderer
+{
+public:
     ~DeviceRenderer() { Stop(); }
     bool Start(const std::wstring& endpointId, int rate, SourceFn source,
-               std::wstring* err);
-    void Stop();
-    void Write(const float* src, size_t frames) { m_ring.Write(src, frames); }
-    unsigned BufferFrames() const { return m_bufferFrames.load(); }
-    unsigned PeriodFrames() const { return m_periodFrames.load(); }
+               std::wstring* err) override;
+    void Stop() override;
+    void Write(const float* src, size_t frames) override { m_ring.Write(src, frames); }
+    unsigned BufferFrames() const override { return m_bufferFrames.load(); }
+    unsigned PeriodFrames() const override { return m_periodFrames.load(); }
 
 private:
     void ThreadMain();
@@ -370,6 +393,49 @@ private:
     bool   m_initOk = false;
     std::wstring m_initErr;
 };
+
+// ---------------------------------------------------------------------------
+// ASIO
+//
+// Both ends of one driver. They are two views of a single callback rather than
+// two independent things, so whichever starts first opens the device and the
+// other joins it; the details are in asioio.cpp.
+//
+// An ASIO block can be mixed freely with WASAPI ones. Whichever output comes
+// first owns the clock and the rest run in ring mode, exactly as two WASAPI
+// outputs already do - so ASIO in to WASAPI out, and the other way about,
+// both work, and only the pairing of an ASIO input with an ASIO output on the
+// same driver avoids a ring altogether.
+// ---------------------------------------------------------------------------
+std::unique_ptr<Renderer> MakeAsioRenderer();
+std::unique_ptr<CaptureSource> MakeAsioCapture(const Block& b, int rate);
+
+// What rate the named driver is running at, for a session that ASIO is
+// clocking. Opens the driver, so this is not idle curiosity: the engine calls
+// it when it is about to use the thing anyway.
+bool AsioQueryRate(const std::wstring& driver, int* rate);
+
+// Everything ASIO is holding is let go. Called when a session stops, because
+// a driver left open is a driver no other program can use.
+void AsioReleaseIfIdle();
+
+// What a driver actually has, for the dialog that offers its channels. There
+// is no way to learn this without opening the driver, which is why a dialog
+// asks only when somebody picks one, and why a refusal comes back as prose
+// rather than as nothing: "in use by another program" is the answer somebody
+// needs to see.
+struct AsioFacts
+{
+    bool ok = false;
+    std::wstring why;              // when it is not ok
+    int rate = 0;
+    int bufferFrames = 0;
+    std::vector<std::wstring> inNames, outNames;
+};
+void AsioQueryDriver(const std::wstring& driver, AsioFacts* out);
+
+// The driver's own settings window, where buffer size and clock source live.
+void AsioShowControlPanel(const std::wstring& driver, HWND parent);
 
 // ---------------------------------------------------------------------------
 // Effects
@@ -643,7 +709,7 @@ private:
         std::atomic<bool> enabled{ true };
         std::atomic<float> mix{ 1.0f };   // effect dry/wet
         std::unique_ptr<CaptureSource> capture;
-        std::unique_ptr<DeviceRenderer> renderer;
+        std::unique_ptr<Renderer> renderer;
         std::unique_ptr<Effect> fx;
         std::unique_ptr<RecordSink> rec;
         std::unique_ptr<NetSink> net;

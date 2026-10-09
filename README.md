@@ -860,6 +860,59 @@ A scheduled check that fails says nothing and writes to the error log instead.
 A laptop that was asleep, or a network that is not up yet, is the usual reason,
 and a box about it would be worse than useless.
 
+## ASIO
+
+An **ASIO Input** block and an **ASIO Output** block, for an interface with an
+ASIO driver. Pick the driver, pick which two of its channels are the left and
+the right, and that is the block.
+
+ASIO is a different shape from WASAPI in ways that show through, so it is worth
+saying what they are rather than letting them be surprises.
+
+**The driver owns the clock.** It does not hand over audio when asked; it calls
+FastRoute when it is ready, at a buffer size it chose. That is the whole reason
+ASIO is low latency. When an ASIO output is the first output block in a session,
+it drives the session, and there is nothing buffered between the mix and the
+hardware at all.
+
+**Input and output are one callback.** A driver presents both halves of an
+interface together, so an ASIO input and an ASIO output on the same driver are
+not two devices - they are two views of one callback. Audio in and audio out
+therefore share a clock exactly: nothing is resampled and nothing drifts. That
+pairing is the one worth reaching for.
+
+**ASIO mixes with WASAPI freely.** An ASIO input into a Windows output, or a
+Windows input into an ASIO output, both work. Whichever output block comes
+first owns the clock and the rest run from a buffer, which is how two Windows
+outputs have always worked here; an ASIO block is simply another block. Those
+are two unrelated clocks, so that path uses the same buffer and the same slow
+drift correction as a network stream or a second sound card - which is to say
+it works, and it is not as tight as ASIO to ASIO on one interface.
+
+**One driver per session.** ASIO keeps a single driver per program, and most
+drivers allow a single program anyway. Two ASIO blocks have to be on the same
+interface; a session asking for two different ones is refused with a reason.
+
+**The sample rate is the one real catch.** A Windows device resamples to its own
+format for nothing, so a WASAPI block runs at the session's rate whatever the
+hardware is doing. ASIO does not: it hands over the hardware's rate and that is
+that. FastRoute asks the driver to change, and most will, but one locked to an
+external clock will not. Then either set the rate in the driver's own control
+panel, or put the ASIO output first among the outputs so the session follows
+the hardware instead. What will not happen is playback at the wrong speed:
+a mismatch that cannot be resolved is refused and says which rate to set.
+
+**Buffer size lives in the driver's panel**, reached with the button in the
+block, because that is where ASIO puts it and where every other host sends
+people. The dialog reads back what the driver reports - channel counts, rate,
+buffer size and what that is in milliseconds - so there is no need to open the
+panel to find out.
+
+The driver is opened only when it is needed: listing the installed drivers
+reads the registry, and nothing takes the hardware until a driver is actually
+picked or a session starts. Stopping a session closes it again, because an
+interface held open is one nothing else can use.
+
 ## Block actions, and the buffer
 
 Everything else a block can be told is a **parameter**: a value written into
@@ -1815,6 +1868,13 @@ any of six conditions, including a sender genuinely running 500 parts per
 million fast and another the same amount slow - far more than two real crystals
 differ by - and in those two the buffer is checked to hold its depth, since a
 correction gentle enough to be inaudible still has to work.
+
+ASIO is checked as far as it can be without hardware, which is not far: the
+driver list is real, and enumeration is what the dialog opens with, so that
+much is verified against the drivers on this machine. Everything past it -
+opening a driver, its callback, the sample conversions - takes the audio
+hardware away from whatever is using it, so none of it has been run here. It
+is written to be read rather than to be trusted.
 
 The updater is checked in three parts. The two decisions that can be wrong
 without anybody noticing - reading the version and commit out of a release

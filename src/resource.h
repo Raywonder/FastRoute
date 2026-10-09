@@ -34,6 +34,7 @@
 #define IDD_BLOCK_PITCH          127
 #define IDD_BLOCK_NETRECV        128
 #define IDD_BLOCK_NETSEND        129
+#define IDD_BLOCK_ASIO           131
 #define IDD_NET_OPUS             130
 
 // Menus
@@ -230,9 +231,9 @@
 #define IDC_SET_REC_LABEL       1213
 #define IDC_SET_REC_FOLDER      1214
 #define IDC_SET_REC_BROWSE      1215
-#define IDC_SET_UPDATE_LABEL    1216
-#define IDC_SET_UPDATE          1217
-#define IDC_SET_UPDATE_SILENT   1218
+#define IDC_SET_UPDATE_LABEL    1320
+#define IDC_SET_UPDATE          1321
+#define IDC_SET_UPDATE_SILENT   1322
 
 // Where a session or block hotkey works: everywhere, or only in FastRoute
 #define IDC_HK_SCOPE_GLOBAL     1216
@@ -336,6 +337,14 @@
 #define IDC_NO_RATEMODE         1293
 #define IDC_NO_DTX              1294
 #define IDC_NO_NOTE             1295
+#define IDC_AS_DRIVER           1300
+#define IDC_AS_REFRESH          1301
+#define IDC_AS_LEFT             1302
+#define IDC_AS_RIGHT            1303
+#define IDC_AS_LEFT_LABEL       1304
+#define IDC_AS_RIGHT_LABEL      1305
+#define IDC_AS_PANEL            1306
+#define IDC_AS_NOTE             1307
 
 // Ten band EQ: one slider and one readout per band, contiguous so the band
 // index is just the control id minus the base.

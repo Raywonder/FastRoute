@@ -1,7 +1,7 @@
 FastRoute - third party notices
 ===============================
 
-FastRoute links nine third party libraries. All are fetched and built from
+FastRoute links ten third party libraries. All are fetched and built from
 source at configure time (see third_party/CMakeLists.txt), which pins the exact
 version each one is taken from.
 
@@ -14,6 +14,7 @@ version each one is taken from.
   libopus, opusfile      Opus, played and recorded
   CLAP                   the CLAP plugin interface, for hosting effects
   VST3 pluginterfaces    the VST3 plugin interface, likewise
+  Steinberg ASIO SDK     the ASIO Input and ASIO Output blocks
 
 Everything else FastRoute uses - WASAPI, Media Foundation, WinHTTP, the common
 controls - ships with Windows.
@@ -299,3 +300,100 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+
+Steinberg ASIO SDK
+------------------
+The ASIO interface, used by the ASIO Input and ASIO Output blocks. ASIO is a
+trademark and software of Steinberg Media Technologies GmbH.
+
+This SDK is licensed per file, and FastRoute uses files under both of its
+licences, so both are reproduced here.
+
+The files in common/ - which are the ASIO interface itself, and cannot be
+avoided by anything that speaks ASIO - carry no licence text of their own and
+so fall under the SDK's top-level LICENSE.txt, reproduced first below. It
+offers a choice between a proprietary Steinberg licence and the GPL version 3.
+FastRoute takes the GPL version 3, and that is why FastRoute as a whole is
+GPLv3: see the LICENSE file in the top level of this distribution.
+
+The host helpers FastRoute also compiles - host/asiodrivers.cpp,
+host/pc/asiolist.cpp and their headers - carry their own embedded licence,
+which is the three-clause BSD licence, reproduced second.
+
+
+The SDK's top-level LICENSE.txt, which governs common/
+------------------------------------------------------
+//-----------------------------------------------------------------------------
+// LICENSE
+// (c) 2025, Steinberg Media Technologies GmbH, All Rights Reserved
+//-----------------------------------------------------------------------------
+This license applies only to files referencing this license,
+for other files of the Software Development Kit the respective embedded license text
+is applicable.
+
+This Software Development Kit is licensed under the terms of the Steinberg ASIO License,
+or alternatively under the terms of the General Public License (GPL) Version 3.
+You may use the Software Development Kit according to either of these licenses as it is
+most appropriate for your project on a case-by-case basis (commercial or not).
+
+a) Proprietary Steinberg ASIO License
+The Software Development Kit may not be distributed in parts or its entirety
+without prior written agreement by Steinberg Media Technologies GmbH.
+The SDK must not be used to re-engineer or manipulate any technology used
+in any Steinberg or Third-party application or software module,
+unless permitted by law.
+Neither the name of the Steinberg Media Technologies GmbH nor the names of its
+contributors may be used to endorse or promote products derived from this
+software without specific prior written permission.
+Before publishing a software under the proprietary license, you need to obtain a copy
+of the License Agreement signed by Steinberg Media Technologies GmbH.
+The Steinberg ASIO SDK License Agreement can be found at:
+www.steinberg.net/en/company/developers.html
+
+THE SDK IS PROVIDED BY STEINBERG MEDIA TECHNOLOGIES GMBH "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+IN NO EVENT SHALL STEINBERG MEDIA TECHNOLOGIES GMBH BE LIABLE FOR ANY DIRECT,
+INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+OF THE POSSIBILITY OF SUCH DAMAGE.
+
+b) General Public License (GPL) Version 3
+Details of these licenses can be found at: www.gnu.org/licenses/gpl-3.0.html
+
+Best Practice recommendation:
+Please refer to the Steinberg ASIO usage guidelines for the use of ASIO, ASIO logo and ASIO 
+compatible logos.
+//----------------------------------------------------------------------------------
+
+
+The embedded licence on the host/ helpers
+-----------------------------------------
+Copyright (c) 2025, Steinberg Media Technologies GmbH. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+  * Redistributions of source code must retain the above copyright notice,
+    this list of conditions and the following disclaimer.
+  * Redistributions in binary form must reproduce the above copyright notice,
+    this list of conditions and the following disclaimer in the documentation
+    and/or other materials provided with the distribution.
+  * Neither the name of the Steinberg Media Technologies nor the names of its
+    contributors may be used to endorse or promote products derived from this
+    software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT,
+INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING,
+BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE  OF THIS SOFTWARE, EVEN IF ADVISED
+OF THE POSSIBILITY OF SUCH DAMAGE.
