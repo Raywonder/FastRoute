@@ -240,6 +240,28 @@ an EQ restores completely; a sampler with a file loaded will not. That is a
 known limit of storing parameter values rather than the plugin's own state
 blob, not a fault.
 
+## Which process is the one playing the sound
+
+The list in an Application block is of processes **holding an audio session**,
+not of windows, so a helper process that plays audio without a window of its
+own is in the list and can be picked. That matters more often than it sounds,
+because a lot of applications do not play their own audio.
+
+Steam is the example worth knowing, found by David K:
+
+* Capturing **steam.exe** gets every game launched from Steam, because Steam
+  starts them and a block captures its target's whole process tree.
+* Capturing **steamwebhelper.exe** gets Steam's own interface sounds, which
+  come from that helper rather than from steam.exe.
+
+So the two are different captures, and which is wanted depends on which sound
+is wanted. Both can be in one session.
+
+Anything built on a web view behaves this way, since the audio belongs to the
+embedded browser process. If a block captures nothing, the thing to try is the
+list itself: whatever is making the sound is in it by definition, under its own
+name, while something is playing.
+
 ## Capturing whatever is in front
 
 An **Application** block can be pointed at a process by name, as it always
