@@ -103,8 +103,56 @@ static const wchar_t* KindName(BlockKind k)
 // add command, so the two cannot disagree about what row 7 is.
 static std::vector<LibraryItem> g_library;
 
+// Whether a group was left shut last time. Collapsed rather than expanded is
+// what is stored, so a group that did not exist when the setting was written
+// arrives open.
+static bool LibraryGroupShut(const wchar_t* cat)
+{
+    for (const std::wstring& c : g_store.settings.libraryCollapsed)
+        if (c == cat) return true;
+    return false;
+}
+
+// Building the tree expands groups itself, and that sends the same
+// notification a person toggling one does. Reading the tree back halfway
+// through building it would see only the groups inserted so far and conclude
+// the rest are shut - which would then be saved over the real setting.
+static bool g_buildingLibrary = false;
+
+// Reads the groups back out of the tree and remembers which are shut, so the
+// state survives closing the window.
+static void RememberLibraryGroups(HWND dlg)
+{
+    if (g_buildingLibrary) return;
+
+    HWND tree = GetDlgItem(dlg, IDC_LIB_TREE);
+    std::vector<std::wstring> shut;
+
+    HTREEITEM h = (HTREEITEM)SendMessageW(tree, TVM_GETNEXTITEM, TVGN_ROOT, 0);
+    while (h)
+    {
+        wchar_t text[128] = {};
+        TVITEMW it{};
+        it.mask = TVIF_TEXT | TVIF_STATE;
+        it.stateMask = TVIS_EXPANDED;
+        it.hItem = h;
+        it.pszText = text;
+        it.cchTextMax = (int)(sizeof(text) / sizeof(text[0])) - 1;
+        if (SendMessageW(tree, TVM_GETITEMW, 0, (LPARAM)&it) &&
+            !(it.state & TVIS_EXPANDED))
+            shut.push_back(text);
+        h = (HTREEITEM)SendMessageW(tree, TVM_GETNEXTITEM, TVGN_NEXT, (LPARAM)h);
+    }
+
+    if (shut == g_store.settings.libraryCollapsed) return;
+    g_store.settings.libraryCollapsed = shut;
+    g_store.Save();
+}
+
 static void BuildLibraryTree(HWND dlg)
 {
+    g_buildingLibrary = true;
+
     HWND tree = GetDlgItem(dlg, IDC_LIB_TREE);
     SendMessageW(tree, TVM_DELETEITEM, 0, (LPARAM)TVI_ROOT);
 
@@ -153,8 +201,18 @@ static void BuildLibraryTree(HWND dlg)
             leaf.item.lParam = -1;
             SendMessageW(tree, TVM_INSERTITEMW, 0, (LPARAM)&leaf);
         }
-        SendMessageW(tree, TVM_EXPAND, TVE_EXPAND, (LPARAM)parent);
+        if (!LibraryGroupShut(cat))
+            SendMessageW(tree, TVM_EXPAND, TVE_EXPAND, (LPARAM)parent);
     }
+
+    // Put the caret on the first group. Without this it lands wherever the
+    // control happens to leave it, which is not the top and is not the same
+    // thing twice - and for anybody reading the window aloud, the first thing
+    // read should be the first thing in it.
+    HTREEITEM first = (HTREEITEM)SendMessageW(tree, TVM_GETNEXTITEM, TVGN_ROOT, 0);
+    if (first) SendMessageW(tree, TVM_SELECTITEM, TVGN_CARET, (LPARAM)first);
+
+    g_buildingLibrary = false;
 }
 
 static std::wstring SessionStateLine(int sessionId)
@@ -336,7 +394,9 @@ static void CmdAddBlock(HWND dlg)
     if (!SendMessageW(tree, TVM_GETITEMW, 0, (LPARAM)&it)) return;
     if (it.lParam < 0)
     {
-        // A category was selected; expand it instead of adding.
+        // A category was selected; expand it instead of adding. Remembering
+        // it is the notification handler's job, which catches the arrow keys
+        // too.
         SendMessageW(tree, TVM_EXPAND, TVE_TOGGLE, (LPARAM)sel);
         return;
     }
@@ -726,6 +786,14 @@ static INT_PTR CALLBACK SessionDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
         {
             CmdEditBlock(dlg);
             return TRUE;
+        }
+        // A group opened or shut, however it was done. The arrow keys are
+        // the way a keyboard gets at this and they do not come through the
+        // Enter handler, so the notification is what to listen to.
+        if (hdr->idFrom == IDC_LIB_TREE && hdr->code == TVN_ITEMEXPANDEDW)
+        {
+            RememberLibraryGroups(dlg);
+            return 0;
         }
         if (hdr->idFrom == IDC_LIB_TREE && hdr->code == NM_DBLCLK)
         {

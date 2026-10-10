@@ -954,6 +954,14 @@ void SessionStore::Load()
         settings.showHide.vk      = set->AsInt(L"hotkeyVk", 'R');
 
         settings.recFolder = set->AsString(L"recFolder");
+
+        const Json* shut = set->Find(L"libraryCollapsed");
+        if (shut && shut->IsArray())
+            for (const Json& e : shut->Items())
+            {
+                std::wstring c = e.AsText();
+                if (!c.empty()) settings.libraryCollapsed.push_back(c);
+            }
         settings.updateCheck = set->AsInt(L"updateCheck", UC_NEVER);
         settings.updateSilent = set->AsBool(L"updateSilent", false);
 
@@ -1235,6 +1243,10 @@ bool SessionStore::Save(std::wstring* err) const
     Json paths = Json::Arr();
     for (const std::wstring& p : settings.pluginPaths) paths.Push(Json::Str(p));
     set.Set(L"pluginPaths", std::move(paths));
+
+    Json shut = Json::Arr();
+    for (const std::wstring& c : settings.libraryCollapsed) shut.Push(Json::Str(c));
+    set.Set(L"libraryCollapsed", std::move(shut));
 
     Json plugs = Json::Arr();
     for (const PluginEntry& pe : settings.plugins)

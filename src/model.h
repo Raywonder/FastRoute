@@ -628,6 +628,12 @@ struct AppSettings
     // an update that restarts the program in the middle of a recording would
     // be a poor surprise.
     bool updateSilent = false;
+
+    // Which groups in the blocks library are shut. The collapsed ones rather
+    // than the expanded ones, so that an empty list means everything open,
+    // which is how it behaved before this was remembered at all - and so that
+    // a group added in a later version arrives open rather than hidden.
+    std::vector<std::wstring> libraryCollapsed;
 };
 
 // ---------------------------------------------------------------------------
