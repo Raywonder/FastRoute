@@ -240,6 +240,31 @@ an EQ restores completely; a sampler with a file loaded will not. That is a
 known limit of storing parameter values rather than the plugin's own state
 blob, not a fault.
 
+## More than one application in one block
+
+An Application block can name several programs. The list is of checkboxes, so
+tick as many as apply; **Add Application** names one that is not playing
+anything at the moment, which is the ordinary case when a session is being put
+together rather than used.
+
+Each ticked program is captured with its own process tree, and the results are
+summed into the one block. That is the same machinery the System Audio block
+uses for its exclusions, and the set is rescanned while the session runs, so a
+program named here that is not running yet joins the mix when it starts and
+leaves it when it stops. A games block where only one game is ever running is
+therefore normal rather than broken, and only none of them running at all is
+worth an error.
+
+What this is for is a block per *kind* of thing rather than per program. A
+recording session can have a microphone block, a screen reader block naming
+every screen reader, and a game block naming every game, and each block is one
+thing to set a level on, one thing to put an effect in, and - because the
+Recorder follows the block list - one track.
+
+Naming three programs in one block is not the same as three blocks naming one
+each. Three blocks give three levels, three chains and three tracks; one block
+gives one of each. Either is right, depending on which you want.
+
 ## Which process is the one playing the sound
 
 The list in an Application block is of processes **holding an audio session**,

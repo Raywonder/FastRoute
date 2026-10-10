@@ -66,7 +66,6 @@
 
 // Property dialog controls
 #define IDC_NAME_EDIT           1030
-#define IDC_APP_COMBO           1031
 #define IDC_APP_TREE            1032
 #define IDC_DEV_COMBO           1033
 #define IDC_VOL_SLIDER          1034
@@ -345,6 +344,8 @@
 #define IDC_AS_RIGHT_LABEL      1305
 #define IDC_AS_PANEL            1306
 #define IDC_AS_NOTE             1307
+#define IDC_APP_LIST            1330
+#define IDC_APP_ADD             1331
 
 // Ten band EQ: one slider and one readout per band, contiguous so the band
 // index is just the control id minus the base.

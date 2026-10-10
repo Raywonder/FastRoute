@@ -38,7 +38,11 @@ std::wstring Engine::KeyFor(const Block& b)
         // A foreground block's identity is its mode, not a process: the whole
         // point is that the process changes underneath it.
         if (b.appSource != AS_NAMED) return FormatW(L"app|mode%d", b.appSource);
-        return L"app|" + b.processName;
+    {
+        std::wstring key = L"app|";
+        for (const std::wstring& n : AppTargets(b)) key += n + L"|";
+        return key + b.processName;
+    }
     }
     if (b.typeId == BT_INPUT_DEVICE)
         return L"in|" + b.deviceId;
@@ -203,24 +207,59 @@ bool Engine::ApplySession(const Session& s, std::wstring* err, bool* graphIntact
                 created[i] = std::move(n);
                 continue;
             }
-            unsigned long pid = FindProcessIdByName(b.processName);
-            if (pid == 0)
+            const std::vector<std::wstring> want = AppTargets(b);
+
+            // Capturing ourselves is refused whichever program asks for it,
+            // because the session would feed its own output back in. Checked
+            // for every name, not just the first.
+            for (const std::wstring& name : want)
             {
-                if (err) *err = FormatW(L"%s is not running, so it cannot be captured.",
-                                        b.processName.c_str());
-                return false;
+                const unsigned long p = FindProcessIdByName(name);
+                if (p && WouldCaptureSelf(p))
+                {
+                    if (err) *err = FormatW(
+                        L"Capturing %s would include FastRoute itself, because "
+                        L"this process is inside that application's process "
+                        L"tree - the session would capture its own output. Pick "
+                        L"a different application.", name.c_str());
+                    return false;
+                }
             }
-            if (WouldCaptureSelf(pid))
+
+            if (want.size() > 1)
             {
-                if (err) *err = FormatW(
-                    L"Capturing %s would include FastRoute itself, because this "
-                    L"process is inside that application's process tree - the "
-                    L"session would capture its own output. Pick a different "
-                    L"application.", b.processName.c_str());
-                return false;
+                // One capture per program, rescanned, so a program named here
+                // that is not running yet joins the mix when it starts. That
+                // is the point of a block naming several: a games block where
+                // only one game is ever running at a time is normal, so the
+                // ones that are not running are not an error.
+                int running = 0;
+                for (const std::wstring& name : want)
+                    if (FindProcessIdByName(name)) ++running;
+                if (running == 0)
+                {
+                    if (err) *err = FormatW(
+                        L"None of the %zu applications in this block is running, "
+                        L"so there is nothing to capture yet.", want.size());
+                    return false;
+                }
+                n->capture = MakeMultiAppCapture(want, m_rate);
+                if (!n->capture->Start(err)) return false;
             }
-            n->capture = MakeProcessLoopback(pid, m_rate);
-            if (!n->capture->Start(err)) return false;
+            else
+            {
+                const std::wstring only = want.empty() ? b.processName : want[0];
+                unsigned long pid = FindProcessIdByName(only);
+                if (pid == 0)
+                {
+                    if (err) *err = FormatW(
+                        L"%s is not running, so it cannot be captured.",
+                        only.c_str());
+                    return false;
+                }
+                n->capture = MakeProcessLoopback(pid, m_rate);
+                if (!n->capture->Start(err)) return false;
+            }
         }
         else if (b.typeId == BT_INPUT_DEVICE)
         {

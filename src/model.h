@@ -72,6 +72,12 @@ const BlockType* FindBlockType(const std::wstring& id);
 #define BT_OUTPUT_DEVICE L"output.device"
 #define BT_OUT_ASIO     L"output.asio"
 
+// Which programs an application block captures, in the order they are listed.
+// The list where it has one and the single name otherwise, so that one answer
+// serves a session saved before a block could name several. Empty for a block
+// pointed at the foreground, which works its own target out.
+std::vector<std::wstring> AppTargets(const Block& b);
+
 // What an application input block is pointed at. A foreground block needs no
 // process name: it works out its own target, either once or continuously.
 enum AppSource
@@ -372,6 +378,12 @@ struct Block
     int appSource = AS_NAMED;
     std::wstring processName;   // durable key, e.g. "chrome.exe"
     unsigned long processId = 0;// last seen pid; re-resolved by name at run time
+    // More than one program in one block, so that a session can have a block
+    // per group of things rather than per program: every screen reader in one,
+    // every game in another. Empty means the single processName above, which
+    // is what a session saved before this existed has. AppTargets is the only
+    // thing that should decide between the two.
+    std::vector<std::wstring> appNames;
 
     // input.stream
     std::wstring url;           // http or https, an audio stream or a file

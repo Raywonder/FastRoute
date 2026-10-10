@@ -4,6 +4,7 @@ FastRoute changelog
 0.6 (unreleased)
 
 Added
+  - An application block can name more than one program. The list is checkboxes now instead of a single choice, and each ticked program is captured with its own child processes and mixed into the one block - so a session can have a screen reader block naming every screen reader and a game block naming every game, each one level and, when recording, one track. A program named but not running joins the mix when it starts, so only none of them running is an error. Asked for by Gavin Grundlingh.
   - The blocks library remembers which groups you left shut, and opens with the first group focused rather than wherever the tree happened to leave the cursor. Asked for by Gavin Grundlingh.
   - ASIO input and output blocks. Note that the first build of these crashed on choosing a driver that actually worked; fixed before 0.6 was released. Pick the driver and which two of its channels are the left and right. An ASIO input and an ASIO output on the same interface share one callback and one clock, so nothing between them is resampled or drifts. ASIO also mixes with Windows devices in either direction, through the same buffer any two unrelated clocks need. One interface per session, because that is all ASIO allows. Buffer size and sample rate belong to the driver's own control panel, and there is a button for it.
   - FastRoute is on GitHub, at https://github.com/masonasons/FastRoute, under the GPL version 3. Every push builds there and replaces the "latest" release.

@@ -302,10 +302,20 @@ void InitBlockFrom(Block& b, const LibraryItem& item)
     }
 }
 
+std::vector<std::wstring> AppTargets(const Block& b)
+{
+    if (b.typeId != BT_INPUT_APP || b.appSource != AS_NAMED)
+        return std::vector<std::wstring>();
+    if (!b.appNames.empty()) return b.appNames;
+    if (!b.processName.empty()) return { b.processName };
+    return std::vector<std::wstring>();
+}
+
 bool Block::IsConfigured() const
 {
     if (typeId == BT_FX_PLUGIN)    return !plugPath.empty();
-    if (typeId == BT_INPUT_APP)    return appSource != AS_NAMED || !processName.empty();
+    if (typeId == BT_INPUT_APP)
+        return appSource != AS_NAMED || !AppTargets(*this).empty();
     if (typeId == BT_INPUT_STREAM) return !url.empty();
     if (typeId == BT_OUT_RECORDER) return true;   // blank folder means the Music folder
     if (typeId == BT_INPUT_DEVICE || typeId == BT_OUTPUT_DEVICE ||
@@ -325,9 +335,22 @@ std::wstring Block::ParamSummary() const
         if (appSource == AS_FOREGROUND)
             return FormatW(L"the application in front when this block starts, "
                            L"volume %d%%", volumePct);
-        std::wstring who = processName.empty() ? std::wstring(L"(not set)") : processName;
-        return FormatW(L"%s and its child processes, volume %d%%",
-                       who.c_str(), volumePct);
+        const std::vector<std::wstring> who = AppTargets(*this);
+        if (who.empty())
+            return FormatW(L"(not set), volume %d%%", volumePct);
+        if (who.size() == 1)
+            return FormatW(L"%s and its child processes, volume %d%%",
+                           who[0].c_str(), volumePct);
+        // Named in full rather than counted: "3 applications" would mean
+        // opening the block to find out which three.
+        std::wstring list;
+        for (size_t i = 0; i < who.size(); ++i)
+        {
+            if (i) list += (i + 1 == who.size()) ? L" and " : L", ";
+            list += who[i];
+        }
+        return FormatW(L"%s, each with its child processes, volume %d%%",
+                       list.c_str(), volumePct);
     }
     if (typeId == BT_INPUT_DEVICE || typeId == BT_OUTPUT_DEVICE)
     {
@@ -1014,6 +1037,14 @@ void SessionStore::Load()
                 b.deviceName  = jb.AsString(L"deviceName");
                 b.appSource   = jb.AsInt(L"appSource", AS_NAMED);
                 b.processName = jb.AsString(L"process");
+                b.appNames.clear();
+                if (const Json* names = jb.Find(L"appNames"))
+                    if (names->IsArray())
+                        for (const Json& e : names->Items())
+                        {
+                            std::wstring n = e.AsText();
+                            if (!n.empty()) b.appNames.push_back(n);
+                        }
                 b.url          = jb.AsString(L"url");
                 b.bufferMs     = jb.AsInt(L"bufferMs", 1000);
                 b.reconnect    = jb.AsBool(L"reconnect", true);
@@ -1283,6 +1314,13 @@ bool SessionStore::Save(std::wstring* err) const
                 // Kept even for a foreground block: switching the mode back
                 // should find the application that was chosen before.
                 jb.Set(L"process", Json::Str(b.processName));
+                if (b.appNames.size() > 1)
+                {
+                    Json names = Json::Arr();
+                    for (const std::wstring& n : b.appNames)
+                        names.Push(Json::Str(n));
+                    jb.Set(L"appNames", std::move(names));
+                }
             }
             if (b.typeId == BT_INPUT_STREAM)
             {

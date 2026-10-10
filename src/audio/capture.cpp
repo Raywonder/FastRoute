@@ -849,17 +849,34 @@ std::vector<unsigned long> SelectSystemCaptureTargets(
 // ---------------------------------------------------------------------------
 static const int kScanIntervalMs = 500;
 
-class SystemCapture : public CaptureSource
+// Several process loopbacks mixed into one capture, with the set of them
+// changing as processes start and stop.
+//
+// Two blocks are this shape. A System Audio block with exclusions is one
+// capture per application it is allowed to have, because Windows has no way to
+// ask an endpoint for everything except a given list. An Application block
+// naming more than one program is one capture per program, each taking that
+// program whole process tree and all. What differs between them is only which
+// processes to want, which is Targets below; opening them off the audio
+// thread, summing them and dropping the ones that have gone is the same job.
+class MixedCapture : public CaptureSource
 {
 public:
-    SystemCapture(std::wstring endpointId, std::vector<std::wstring> exclude, int rate)
+    // A System Audio block: everything playing to one endpoint, less the
+    // applications named.
+    MixedCapture(std::wstring endpointId, std::vector<std::wstring> exclude, int rate)
         : CaptureSource(rate), m_endpointId(std::move(endpointId)),
           m_exclude(std::move(exclude)) {}
-    ~SystemCapture() override { Stop(); }
+
+    // An Application block naming several programs.
+    MixedCapture(std::vector<std::wstring> include, int rate)
+        : CaptureSource(rate), m_include(std::move(include)), m_byName(true) {}
+
+    ~MixedCapture() override { Stop(); }
 
     bool Start(std::wstring* err) override
     {
-        if (m_exclude.empty())
+        if (!m_byName && m_exclude.empty())
         {
             m_single = MakeLoopbackCapture(m_endpointId, m_rate);
             return m_single->Start(err);
@@ -867,11 +884,16 @@ public:
 
         if (!ProcessLoopbackAvailable())
         {
-            if (err) *err = FormatW(
-                L"Leaving applications out of the system audio needs Windows 10 "
-                L"version 2004 (build 19041) or later, and this is %s. Remove the "
-                L"exclusions to capture the output device as a whole.",
-                WindowsVersionText().c_str());
+            if (err) *err = m_byName
+                ? FormatW(
+                    L"Capturing an application needs Windows 10 version 2004 "
+                    L"(build 19041) or later, and this is %s.",
+                    WindowsVersionText().c_str())
+                : FormatW(
+                    L"Leaving applications out of the system audio needs Windows 10 "
+                    L"version 2004 (build 19041) or later, and this is %s. Remove the "
+                    L"exclusions to capture the output device as a whole.",
+                    WindowsVersionText().c_str());
             return false;
         }
 
@@ -1000,12 +1022,7 @@ private:
 
     void Rescan()
     {
-        // Only what is playing to this block's own endpoint. Taking every
-        // audio process on the machine would pull in applications on other
-        // output devices, which were never part of this device's mix.
-        std::vector<unsigned long> want = SelectSystemCaptureTargets(
-            EnumAudioProcessesOn(m_endpointId), EnumProcessTree(), m_exclude,
-            GetCurrentProcessId());
+        std::vector<unsigned long> want = Targets();
 
         std::vector<unsigned long> have;
         {
@@ -1047,8 +1064,38 @@ private:
         dying.clear();   // joins their threads, outside the lock
     }
 
+    // Which processes to be capturing right now. Runs on the scan thread with
+    // no lock held, because working it out means enumerating.
+    std::vector<unsigned long> Targets()
+    {
+        if (!m_byName)
+            // Only what is playing to this block own endpoint. Taking every
+            // audio process on the machine would pull in applications on other
+            // output devices, which were never part of this device mix.
+            return SelectSystemCaptureTargets(
+                EnumAudioProcessesOn(m_endpointId), EnumProcessTree(), m_exclude,
+                GetCurrentProcessId());
+
+        // One per named program, and each capture takes that program whole
+        // process tree, so a program whose audio comes out of a helper of its
+        // own is covered by naming the program.
+        std::vector<unsigned long> want;
+        for (const std::wstring& name : m_include)
+        {
+            const unsigned long pid = FindProcessIdByName(name);
+            if (!pid) continue;                      // not running; maybe later
+            if (pid == GetCurrentProcessId()) continue;
+            bool dup = false;
+            for (unsigned long w : want) if (w == pid) dup = true;
+            if (!dup) want.push_back(pid);
+        }
+        return want;
+    }
+
     std::wstring m_endpointId;
     std::vector<std::wstring> m_exclude;
+    std::vector<std::wstring> m_include;
+    bool m_byName = false;
     std::unique_ptr<CaptureSource> m_single;   // the no-exclusions path
 
     std::vector<Child> m_children;
@@ -1066,7 +1113,13 @@ std::unique_ptr<CaptureSource> MakeSystemCapture(const std::wstring& endpointId,
                                                  const std::vector<std::wstring>& exclude,
                                                  int rate)
 {
-    return std::unique_ptr<CaptureSource>(new SystemCapture(endpointId, exclude, rate));
+    return std::unique_ptr<CaptureSource>(new MixedCapture(endpointId, exclude, rate));
+}
+
+std::unique_ptr<CaptureSource> MakeMultiAppCapture(const std::vector<std::wstring>& names,
+                                                   int rate)
+{
+    return std::unique_ptr<CaptureSource>(new MixedCapture(names, rate));
 }
 
 // ---------------------------------------------------------------------------

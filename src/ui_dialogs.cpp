@@ -253,47 +253,71 @@ bool PromptForName(HWND parent, const wchar_t* caption, const wchar_t* label,
 // Application input block
 // ---------------------------------------------------------------------------
 
-static void FillAppCombo(HWND dlg, const std::wstring& keepExe,
-                         std::vector<AudioProcess>& procs)
-{
-    HWND cb = GetDlgItem(dlg, IDC_APP_COMBO);
-    SendMessageW(cb, CB_RESETCONTENT, 0, 0);
-
-    procs = EnumAudioProcesses();
-
-    // Keep the configured application selectable even when it is not currently
-    // playing anything.
-    bool present = false;
-    for (const AudioProcess& p : procs)
-        if (IEquals(p.exeName, keepExe)) present = true;
-    if (!keepExe.empty() && !present)
-    {
-        AudioProcess p;
-        p.exeName = keepExe;
-        p.displayName = L"not currently playing audio";
-        procs.push_back(p);
-    }
-
-    int select = -1;
-    for (size_t i = 0; i < procs.size(); ++i)
-    {
-        std::wstring label = procs[i].exeName;
-        if (!procs[i].displayName.empty() && !IEquals(procs[i].displayName, procs[i].exeName))
-            label += L" (" + procs[i].displayName + L")";
-
-        int idx = (int)SendMessageW(cb, CB_ADDSTRING, 0, (LPARAM)label.c_str());
-        SendMessageW(cb, CB_SETITEMDATA, idx, (LPARAM)i);
-        if (IEquals(procs[i].exeName, keepExe)) select = idx;
-    }
-    if (select < 0 && SendMessageW(cb, CB_GETCOUNT, 0, 0) > 0) select = 0;
-    SendMessageW(cb, CB_SETCURSEL, select, 0);
-}
-
 struct AppCtx
 {
     Block* block;
     std::vector<AudioProcess> procs;
 };
+
+// Everything playing right now, plus every name the block already has that is
+// not - a program chosen yesterday should not fall off the list because it
+// happens to be quiet today - with the block's own choices ticked.
+static void FillAppList(HWND dlg, AppCtx* ctx, const std::vector<std::wstring>& ticked)
+{
+    HWND list = GetDlgItem(dlg, IDC_APP_LIST);
+    SendMessageW(list, LVM_DELETEALLITEMS, 0, 0);
+    ctx->procs.clear();
+
+    for (const AudioProcess& p : EnumAudioProcesses())
+    {
+        if (p.exeName.empty()) continue;
+        bool dup = false;
+        for (const AudioProcess& q : ctx->procs)
+            if (IEquals(q.exeName, p.exeName)) dup = true;
+        if (!dup) ctx->procs.push_back(p);
+    }
+    for (const std::wstring& t : ticked)
+    {
+        bool dup = false;
+        for (const AudioProcess& q : ctx->procs)
+            if (IEquals(q.exeName, t)) dup = true;
+        if (dup) continue;
+        AudioProcess p;
+        p.exeName = t;
+        p.displayName = L"not currently playing audio";
+        ctx->procs.push_back(p);
+    }
+
+    for (size_t i = 0; i < ctx->procs.size(); ++i)
+    {
+        std::wstring label = ctx->procs[i].exeName;
+        if (!ctx->procs[i].displayName.empty() &&
+            !IEquals(ctx->procs[i].displayName, ctx->procs[i].exeName))
+            label += L" (" + ctx->procs[i].displayName + L")";
+
+        LVITEMW it{};
+        it.mask = LVIF_TEXT;
+        it.iItem = (int)i;
+        it.pszText = const_cast<wchar_t*>(label.c_str());
+        SendMessageW(list, LVM_INSERTITEMW, 0, (LPARAM)&it);
+
+        bool on = false;
+        for (const std::wstring& t : ticked)
+            if (IEquals(t, ctx->procs[i].exeName)) on = true;
+        ListView_SetCheckState(list, (int)i, on ? TRUE : FALSE);
+    }
+}
+
+// The ticked names, in the order the rows are in.
+static std::vector<std::wstring> ReadAppList(HWND dlg, AppCtx* ctx)
+{
+    HWND list = GetDlgItem(dlg, IDC_APP_LIST);
+    std::vector<std::wstring> out;
+    for (size_t i = 0; i < ctx->procs.size(); ++i)
+        if (ListView_GetCheckState(list, (int)i))
+            out.push_back(ctx->procs[i].exeName);
+    return out;
+}
 
 // The application list only means anything when the block is pointed at a
 // name. In the other two modes it is left unavailable rather than hidden, so
@@ -308,9 +332,34 @@ static int AppModeOf(HWND dlg)
 static void AppModeState(HWND dlg)
 {
     const bool named = AppModeOf(dlg) == AS_NAMED;
-    EnableWindow(GetDlgItem(dlg, IDC_APP_COMBO), named);
+    EnableWindow(GetDlgItem(dlg, IDC_APP_LIST), named);
     EnableWindow(GetDlgItem(dlg, IDC_APP_LABEL), named);
+    EnableWindow(GetDlgItem(dlg, IDC_APP_ADD), named);
     EnableWindow(GetDlgItem(dlg, IDC_BTN_REFRESH), named);
+}
+
+// How many are ticked, said plainly, because a list of checkboxes does not
+// tell you its own total and more than one is the point of the thing.
+static void AppCountNote(HWND dlg, AppCtx* ctx)
+{
+    const size_t n = ReadAppList(dlg, ctx).size();
+    std::wstring note;
+    if (AppModeOf(dlg) != AS_NAMED)
+        note = L"This block goes by whatever is in front, so the list above is "
+               L"not used. A block that goes by what is in front ignores the "
+               L"Start menu, the task switcher and the desktop, and never "
+               L"captures FastRoute itself.";
+    else if (n == 0)
+        note = L"Nothing ticked. Tick one or more applications above, or use "
+               L"Add Application to name one that is not playing anything yet.";
+    else if (n == 1)
+        note = L"One application, captured with its child processes.";
+    else
+        note = FormatW(L"%zu applications, each captured with its child "
+                       L"processes and mixed together in this one block. One "
+                       L"of them not running is not a problem: it joins the "
+                       L"mix when it starts.", n);
+    SetDlgItemTextW(dlg, IDC_APP_NOTE, note.c_str());
 }
 
 static INT_PTR CALLBACK AppDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
@@ -323,12 +372,24 @@ static INT_PTR CALLBACK AppDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
         ReverseSliderKeys(dlg);
         ctx = reinterpret_cast<AppCtx*>(lp);
         SetWindowLongPtrW(dlg, DWLP_USER, lp);
-        FillAppCombo(dlg, ctx->block->processName, ctx->procs);
+        {
+            HWND list = GetDlgItem(dlg, IDC_APP_LIST);
+            SendMessageW(list, LVM_SETEXTENDEDLISTVIEWSTYLE,
+                         LVS_EX_FULLROWSELECT | LVS_EX_CHECKBOXES,
+                         LVS_EX_FULLROWSELECT | LVS_EX_CHECKBOXES);
+            LVCOLUMNW col{};
+            col.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_SUBITEM;
+            col.pszText = const_cast<wchar_t*>(L"Application");
+            col.cx = 260;
+            SendMessageW(list, LVM_INSERTCOLUMNW, 0, (LPARAM)&col);
+        }
+        FillAppList(dlg, ctx, AppTargets(*ctx->block));
         CheckRadioButton(dlg, IDC_APP_MODE_NAMED, IDC_APP_MODE_FOLLOW,
                          ctx->block->appSource == AS_FOLLOW     ? IDC_APP_MODE_FOLLOW :
                          ctx->block->appSource == AS_FOREGROUND ? IDC_APP_MODE_FRONT
                                                                 : IDC_APP_MODE_NAMED);
         AppModeState(dlg);
+        AppCountNote(dlg, ctx);
         CheckDlgButton(dlg, IDC_BLOCK_ENABLED, ctx->block->enabled ? BST_CHECKED : BST_UNCHECKED);
         SetupVolumeSlider(dlg, ctx->block->volumePct);
         return TRUE;
@@ -344,45 +405,64 @@ static INT_PTR CALLBACK AppDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
         case IDC_APP_MODE_FRONT:
         case IDC_APP_MODE_FOLLOW:
             AppModeState(dlg);
+            AppCountNote(dlg, ctx);
             return TRUE;
 
-        case IDC_BTN_REFRESH:
+        case IDC_APP_ADD:
         {
-            std::wstring keep = ctx->block->processName;
-            int sel = (int)SendDlgItemMessageW(dlg, IDC_APP_COMBO, CB_GETCURSEL, 0, 0);
-            if (sel >= 0)
-            {
-                LRESULT d = SendDlgItemMessageW(dlg, IDC_APP_COMBO, CB_GETITEMDATA, sel, 0);
-                if (d >= 0 && (size_t)d < ctx->procs.size()) keep = ctx->procs[(size_t)d].exeName;
-            }
-            FillAppCombo(dlg, keep, ctx->procs);
-            SetFocus(GetDlgItem(dlg, IDC_APP_COMBO));
+            // For something that is not playing anything yet, which is the
+            // ordinary case for a games block: none of them is running when
+            // the session is being put together.
+            std::wstring name;
+            if (!PromptForName(dlg, L"Add Application",
+                               L"Program &file name, such as chrome.exe:", name))
+                return TRUE;
+            std::vector<std::wstring> keep = ReadAppList(dlg, ctx);
+            bool dup = false;
+            for (const std::wstring& e : keep) if (IEquals(e, name)) dup = true;
+            if (!dup) keep.push_back(name);
+            FillAppList(dlg, ctx, keep);
+            AppCountNote(dlg, ctx);
+            SetFocus(GetDlgItem(dlg, IDC_APP_LIST));
             return TRUE;
         }
+
+        case IDC_BTN_REFRESH:
+            // The ticks are what is kept, not the highlighted row: refreshing
+            // must not quietly drop a choice because its program stopped.
+            FillAppList(dlg, ctx, ReadAppList(dlg, ctx));
+            AppCountNote(dlg, ctx);
+            SetFocus(GetDlgItem(dlg, IDC_APP_LIST));
+            return TRUE;
         case IDC_APPLY:
         case IDOK:
         {
             const int mode = AppModeOf(dlg);
-            int sel = (int)SendDlgItemMessageW(dlg, IDC_APP_COMBO, CB_GETCURSEL, 0, 0);
-            // Only a block that goes by name needs one. The other two work it
-            // out for themselves, and refusing them here would mean the list
-            // being empty stopped a block that never reads it.
-            if (sel < 0 && mode == AS_NAMED)
+            const std::vector<std::wstring> picked = ReadAppList(dlg, ctx);
+
+            // Only a block that goes by name needs any. The other two work it
+            // out for themselves, and refusing them here would mean an empty
+            // list stopping a block that never reads it.
+            if (picked.empty() && mode == AS_NAMED)
             {
-                ErrorBox(dlg, L"No application is currently playing audio. Start playback in the "
-                              L"application you want to capture, then choose Refresh. You can "
-                              L"also point this block at whatever is in front instead, which "
-                              L"needs no list.");
+                ErrorBox(dlg, L"No application is ticked. Tick one or more in the list, or use "
+                              L"Add Application to name one that is not playing anything yet. "
+                              L"You can also point this block at whatever is in front instead, "
+                              L"which needs no list at all.");
+                SetFocus(GetDlgItem(dlg, IDC_APP_LIST));
                 return TRUE;
             }
-            LRESULT d = sel >= 0
-                      ? SendDlgItemMessageW(dlg, IDC_APP_COMBO, CB_GETITEMDATA, sel, 0) : -1;
-            if (d >= 0 && (size_t)d < ctx->procs.size())
+
+            // Kept whichever mode is chosen, so switching back to the list
+            // finds what was picked before. processName stays as the first of
+            // them: it is what a FastRoute without this feature would read.
+            if (!picked.empty())
             {
-                // Kept whichever mode is chosen, so switching back to the list
-                // finds the application that was picked before.
-                ctx->block->processName = ctx->procs[(size_t)d].exeName;
-                ctx->block->processId   = ctx->procs[(size_t)d].pid;
+                ctx->block->appNames = picked;
+                ctx->block->processName = picked[0];
+                ctx->block->processId = 0;
+                for (const AudioProcess& q : ctx->procs)
+                    if (IEquals(q.exeName, picked[0])) ctx->block->processId = q.pid;
             }
             ctx->block->appSource   = mode;
             ctx->block->enabled     = IsDlgButtonChecked(dlg, IDC_BLOCK_ENABLED) == BST_CHECKED;

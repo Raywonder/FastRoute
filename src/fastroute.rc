@@ -273,7 +273,7 @@ BEGIN
     PUSHBUTTON      "Cancel", IDCANCEL, 183, 47, 50, 16
 END
 
-IDD_BLOCK_APP DIALOGEX 0, 0, 268, 202
+IDD_BLOCK_APP DIALOGEX 0, 0, 300, 316
 STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Application Input Block"
 FONT 9, "Segoe UI", 400, 0, 0x1
@@ -285,21 +285,22 @@ BEGIN
                     IDC_APP_MODE_FRONT, "Button", BS_AUTORADIOBUTTON, 7, 21, 254, 10
     CONTROL         "&Follow whatever is in front, switching as it changes",
                     IDC_APP_MODE_FOLLOW, "Button", BS_AUTORADIOBUTTON, 7, 35, 254, 10
-    LTEXT           "A&pplication:", IDC_APP_LABEL, 7, 55, 190, 9
-    COMBOBOX        IDC_APP_COMBO, 7, 67, 190, 200,
-                    CBS_DROPDOWNLIST | CBS_SORT | WS_VSCROLL | WS_TABSTOP | WS_GROUP
-    PUSHBUTTON      "&Refresh", IDC_BTN_REFRESH, 203, 66, 58, 16
-    LTEXT           "The application's child processes are captured with it. A block that goes by what is in front ignores the Start menu, the task switcher and the desktop, so those never become the target, and it never captures FastRoute itself.",
-                    IDC_APP_NOTE, 7, 88, 254, 34
+    LTEXT           "Ca&pture these applications:", IDC_APP_LABEL, 7, 55, 286, 9
+    CONTROL         "", IDC_APP_LIST, WC_LISTVIEW,
+                    LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_BORDER |
+                    WS_TABSTOP | WS_GROUP, 7, 67, 286, 108
+    PUSHBUTTON      "A&dd Application...", IDC_APP_ADD, 7, 179, 90, 16
+    PUSHBUTTON      "&Refresh", IDC_BTN_REFRESH, 103, 179, 58, 16
+    LTEXT           "", IDC_APP_NOTE, 7, 201, 286, 42
     CONTROL         "Block e&nabled", IDC_BLOCK_ENABLED, "Button",
-                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 126, 200, 12
-    LTEXT           "&Volume:", -1, 7, 142, 190, 9
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 247, 200, 12
+    LTEXT           "&Volume:", -1, 7, 263, 190, 9
     CONTROL         "", IDC_VOL_SLIDER, "msctls_trackbar32",
-                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 154, 190, 22
-    LTEXT           "100%", IDC_VOL_TEXT, 203, 160, 58, 9
-    PUSHBUTTON      "&Apply",  IDC_APPLY, 97, 180, 50, 16
-    DEFPUSHBUTTON   "OK",     IDOK,     154, 180, 50, 16
-    PUSHBUTTON      "Cancel", IDCANCEL, 211, 180, 50, 16
+                    TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 275, 190, 22
+    LTEXT           "100%", IDC_VOL_TEXT, 203, 281, 58, 9
+    PUSHBUTTON      "&Apply",  IDC_APPLY, 129, 294, 50, 16
+    DEFPUSHBUTTON   "OK",     IDOK,     186, 294, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 243, 294, 50, 16
 END
 
 IDD_BLOCK_DEVICE DIALOGEX 0, 0, 268, 122

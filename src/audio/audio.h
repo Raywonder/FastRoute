@@ -296,6 +296,12 @@ std::unique_ptr<CaptureSource> MakeLoopbackCapture(const std::wstring& endpointI
 std::unique_ptr<CaptureSource> MakeSystemCapture(const std::wstring& endpointId,
                                                  const std::vector<std::wstring>& exclude,
                                                  int rate);
+// An Application block naming more than one program: one process loopback per
+// program, each taking that program and its children, summed. The set is
+// rescanned, so a program named here that is not running yet joins the mix
+// when it starts and leaves it when it stops.
+std::unique_ptr<CaptureSource> MakeMultiAppCapture(const std::vector<std::wstring>& names,
+                                                   int rate);
 // An application block pointed at the foreground rather than at a name. With
 // `follow` it keeps up as the foreground changes; without it, it resolves once
 // when it starts and again whenever the block is switched back on.
