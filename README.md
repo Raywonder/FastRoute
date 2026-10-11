@@ -265,11 +265,48 @@ Naming three programs in one block is not the same as three blocks naming one
 each. Three blocks give three levels, three chains and three tracks; one block
 gives one of each. Either is right, depending on which you want.
 
+## What the application list contains
+
+An Application block's list comes in three parts, in this order:
+
+* the programs **playing audio** right now;
+* the programs with a **window on screen**, playing or not;
+* and the programs this block already names, whether or not either is true of
+  them today.
+
+Every row says which of those it is, so "running" and "playing audio" are told
+apart by reading the row rather than by counting down the list.
+
+The second part is there because the first one used to be the whole list, and a
+program that is running quietly is not in it. Neither is a program whose only
+sounds go through the Windows system sounds session: that session belongs to no
+process, so there is nothing to attribute it to, and the programs that use it
+are mostly older ones calling `PlaySound`. None of this has anything to do with
+whether a program is 32-bit or 64-bit, which is what the report that prompted
+the change suspected - a process's name is read the same way either way, and a
+32-bit program with an audio session was always listed. What the missing
+programs had in common was being quiet at the moment the list was built.
+
+**Show every running program** adds the rest of the process table: the things
+with no window and nothing to hear, services included. It is not the default,
+because there are a few hundred of them and most are not applications in any
+sense a person means, but it means a program that ought to be in the list and
+is not can be found there rather than typed from memory.
+
+**Add Application** is for a program that is not running at all, which is the
+ordinary case when a session is put together before the thing it is going to
+record. A name typed there stays in the list, marked *not running*, until it is
+unticked.
+
+FastRoute itself is never offered, and nor is anything it was started from:
+capturing either would take FastRoute's own output with it and feed the session
+back into itself.
+
 ## Which process is the one playing the sound
 
-The list in an Application block is of processes **holding an audio session**,
-not of windows, so a helper process that plays audio without a window of its
-own is in the list and can be picked. That matters more often than it sounds,
+The list includes every process **holding an audio session**, window or no
+window, so a helper process that plays audio without a window of its own is in
+it and can be picked. That matters more often than it sounds,
 because a lot of applications do not play their own audio.
 
 Steam is the example worth knowing, found by David K:

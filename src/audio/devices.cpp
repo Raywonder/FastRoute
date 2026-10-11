@@ -8,6 +8,7 @@
 #include <psapi.h>
 #include <tlhelp32.h>
 #include <shlwapi.h>
+#include <algorithm>
 
 // ---------------------------------------------------------------------------
 
@@ -337,5 +338,115 @@ std::vector<AudioProcess> EnumAudioProcessesOn(const std::wstring& endpointId)
     if (FAILED(OpenEndpoint(endpointId, true, &dev)) || !dev) return out;
     AppendSessionsOn(dev, true, out);
     dev->Release();
+    return out;
+}
+
+// ---------------------------------------------------------------------------
+// What an application block offers to capture
+// ---------------------------------------------------------------------------
+
+// This process and everything it was started from, worked out once from a
+// snapshot that has already been taken. WouldCaptureSelf answers the same
+// question, but it takes a snapshot of its own each time it is asked, and here
+// it would be asked once per process on the machine.
+static std::vector<unsigned long> SelfAndAbove(const std::vector<ProcessEntry>& all)
+{
+    std::vector<unsigned long> out;
+    unsigned long cur = (unsigned long)GetCurrentProcessId();
+    for (int hop = 0; hop < 64 && cur; ++hop)
+    {
+        out.push_back(cur);
+        unsigned long parent = 0;
+        for (const ProcessEntry& e : all) if (e.pid == cur) { parent = e.parent; break; }
+        if (!parent) break;
+        cur = parent;
+    }
+    return out;
+}
+
+// Each group is put in order within itself, so arrowing down a long list is
+// predictable, while the groups stay in the order that puts the likeliest
+// answer at the top.
+static void SortRange(std::vector<AppCandidate>& v, size_t from)
+{
+    std::sort(v.begin() + (ptrdiff_t)from, v.end(),
+              [](const AppCandidate& a, const AppCandidate& b)
+              { return _wcsicmp(a.exeName.c_str(), b.exeName.c_str()) < 0; });
+}
+
+static bool Contains(const std::vector<unsigned long>& v, unsigned long pid)
+{
+    for (unsigned long x : v) if (x == pid) return true;
+    return false;
+}
+
+// One row per program, so a second instance of something already listed adds
+// what it knows rather than a duplicate row: the copy with a window supplies
+// the title, the copy with an audio session supplies "playing".
+static void AddCandidate(std::vector<AppCandidate>& out, const std::wstring& exe,
+                         const std::wstring& display, bool playing, bool running)
+{
+    if (exe.empty()) return;
+    for (AppCandidate& c : out)
+        if (IEquals(c.exeName, exe))
+        {
+            c.playing = c.playing || playing;
+            c.running = c.running || running;
+            if (c.displayName.empty()) c.displayName = display;
+            return;
+        }
+
+    AppCandidate c;
+    c.exeName = exe;
+    c.displayName = display;
+    c.playing = playing;
+    c.running = running;
+    out.push_back(c);
+}
+
+std::vector<AppCandidate> AppCandidates(const std::vector<std::wstring>& ticked,
+                                        bool everything)
+{
+    std::vector<AppCandidate> out;
+    const std::vector<ProcessEntry> all = EnumProcessTree();
+    const std::vector<unsigned long> ours = SelfAndAbove(all);
+
+    // What is playing, which is what someone looking for a program they can
+    // hear will look for first.
+    for (const AudioProcess& p : EnumAudioProcesses())
+    {
+        if (Contains(ours, p.pid)) continue;
+        AddCandidate(out, p.exeName, p.displayName, true, true);
+    }
+    SortRange(out, 0);
+
+    // Then what is on screen. EnumWindowedApps has left us out already.
+    size_t mark = out.size();
+    for (const AudioProcess& p : EnumWindowedApps())
+        AddCandidate(out, p.exeName, p.displayName, false, true);
+    SortRange(out, mark);
+
+    if (everything)
+    {
+        mark = out.size();
+        for (const ProcessEntry& e : all)
+        {
+            if (Contains(ours, e.pid)) continue;
+            AddCandidate(out, e.exeName, std::wstring(), false, true);
+        }
+        SortRange(out, mark);
+    }
+
+    // And last the block's own choices, whether or not they are anywhere to be
+    // found. One that is running without a window or a sound is still running,
+    // and saying so is the difference between "wait for it" and "check the
+    // name".
+    for (const std::wstring& t : ticked)
+    {
+        bool runs = false;
+        for (const ProcessEntry& e : all) if (IEquals(e.exeName, t)) runs = true;
+        AddCandidate(out, t, std::wstring(), false, runs);
+    }
+
     return out;
 }

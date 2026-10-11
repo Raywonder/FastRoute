@@ -256,44 +256,35 @@ bool PromptForName(HWND parent, const wchar_t* caption, const wchar_t* label,
 struct AppCtx
 {
     Block* block;
-    std::vector<AudioProcess> procs;
+    std::vector<AppCandidate> apps;     // one per row, in row order
 };
 
-// Everything playing right now, plus every name the block already has that is
-// not - a program chosen yesterday should not fall off the list because it
-// happens to be quiet today - with the block's own choices ticked.
+// A row per program: what it is called, what the person using it calls it, and
+// whether it is playing, merely running, or neither. The state is spelled out
+// rather than left to the order of the rows, because the order of the rows is
+// not something a screen reader conveys.
 static void FillAppList(HWND dlg, AppCtx* ctx, const std::vector<std::wstring>& ticked)
 {
     HWND list = GetDlgItem(dlg, IDC_APP_LIST);
     SendMessageW(list, LVM_DELETEALLITEMS, 0, 0);
-    ctx->procs.clear();
+    ctx->apps = AppCandidates(ticked,
+                              IsDlgButtonChecked(dlg, IDC_APP_ALL) == BST_CHECKED);
 
-    for (const AudioProcess& p : EnumAudioProcesses())
+    for (size_t i = 0; i < ctx->apps.size(); ++i)
     {
-        if (p.exeName.empty()) continue;
-        bool dup = false;
-        for (const AudioProcess& q : ctx->procs)
-            if (IEquals(q.exeName, p.exeName)) dup = true;
-        if (!dup) ctx->procs.push_back(p);
-    }
-    for (const std::wstring& t : ticked)
-    {
-        bool dup = false;
-        for (const AudioProcess& q : ctx->procs)
-            if (IEquals(q.exeName, t)) dup = true;
-        if (dup) continue;
-        AudioProcess p;
-        p.exeName = t;
-        p.displayName = L"not currently playing audio";
-        ctx->procs.push_back(p);
-    }
-
-    for (size_t i = 0; i < ctx->procs.size(); ++i)
-    {
-        std::wstring label = ctx->procs[i].exeName;
-        if (!ctx->procs[i].displayName.empty() &&
-            !IEquals(ctx->procs[i].displayName, ctx->procs[i].exeName))
-            label += L" (" + ctx->procs[i].displayName + L")";
+        const AppCandidate& a = ctx->apps[i];
+        std::wstring label = a.exeName;
+        if (!a.displayName.empty() && !IEquals(a.displayName, a.exeName))
+        {
+            // A window title can be a whole sentence, and the part that says
+            // which program this is comes at the start of it.
+            std::wstring title = a.displayName;
+            if (title.size() > 60) title = title.substr(0, 57) + L"...";
+            label += L" (" + title + L")";
+        }
+        label += a.playing ? L" - playing audio"
+               : a.running ? L" - running"
+                           : L" - not running";
 
         LVITEMW it{};
         it.mask = LVIF_TEXT;
@@ -303,7 +294,7 @@ static void FillAppList(HWND dlg, AppCtx* ctx, const std::vector<std::wstring>& 
 
         bool on = false;
         for (const std::wstring& t : ticked)
-            if (IEquals(t, ctx->procs[i].exeName)) on = true;
+            if (IEquals(t, a.exeName)) on = true;
         ListView_SetCheckState(list, (int)i, on ? TRUE : FALSE);
     }
 }
@@ -313,9 +304,9 @@ static std::vector<std::wstring> ReadAppList(HWND dlg, AppCtx* ctx)
 {
     HWND list = GetDlgItem(dlg, IDC_APP_LIST);
     std::vector<std::wstring> out;
-    for (size_t i = 0; i < ctx->procs.size(); ++i)
+    for (size_t i = 0; i < ctx->apps.size(); ++i)
         if (ListView_GetCheckState(list, (int)i))
-            out.push_back(ctx->procs[i].exeName);
+            out.push_back(ctx->apps[i].exeName);
     return out;
 }
 
@@ -335,6 +326,7 @@ static void AppModeState(HWND dlg)
     EnableWindow(GetDlgItem(dlg, IDC_APP_LIST), named);
     EnableWindow(GetDlgItem(dlg, IDC_APP_LABEL), named);
     EnableWindow(GetDlgItem(dlg, IDC_APP_ADD), named);
+    EnableWindow(GetDlgItem(dlg, IDC_APP_ALL), named);
     EnableWindow(GetDlgItem(dlg, IDC_BTN_REFRESH), named);
 }
 
@@ -350,8 +342,10 @@ static void AppCountNote(HWND dlg, AppCtx* ctx)
                L"Start menu, the task switcher and the desktop, and never "
                L"captures FastRoute itself.";
     else if (n == 0)
-        note = L"Nothing ticked. Tick one or more applications above, or use "
-               L"Add Application to name one that is not playing anything yet.";
+        note = L"Nothing ticked. The list is what is playing now, then what has "
+               L"a window on screen. For a program with neither, tick Show "
+               L"every running program; for one that is not started yet, use "
+               L"Add Application and type its name.";
     else if (n == 1)
         note = L"One application, captured with its child processes.";
     else
@@ -434,6 +428,14 @@ static INT_PTR CALLBACK AppDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
             AppCountNote(dlg, ctx);
             SetFocus(GetDlgItem(dlg, IDC_APP_LIST));
             return TRUE;
+
+        case IDC_APP_ALL:
+            // Focus stays on the checkbox that was just toggled. The list is
+            // next along, and being moved there instead would make it hard to
+            // tell what the checkbox had done.
+            FillAppList(dlg, ctx, ReadAppList(dlg, ctx));
+            AppCountNote(dlg, ctx);
+            return TRUE;
         case IDC_APPLY:
         case IDOK:
         {
@@ -461,8 +463,6 @@ static INT_PTR CALLBACK AppDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
                 ctx->block->appNames = picked;
                 ctx->block->processName = picked[0];
                 ctx->block->processId = 0;
-                for (const AudioProcess& q : ctx->procs)
-                    if (IEquals(q.exeName, picked[0])) ctx->block->processId = q.pid;
             }
             ctx->block->appSource   = mode;
             ctx->block->enabled     = IsDlgButtonChecked(dlg, IDC_BLOCK_ENABLED) == BST_CHECKED;

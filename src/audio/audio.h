@@ -126,6 +126,39 @@ bool ForegroundApp(unsigned long* pid, std::wstring* name);
 // the window handles so the rule can be tested with no windows in sight.
 bool ForegroundCandidate(const std::wstring& windowClass, const std::wstring& exeName);
 
+// The programs with a window on screen, each with its window title as the
+// display name. The shell's own surfaces are left out for the same reason the
+// foreground tracking leaves them out, and a packaged application's window is
+// credited to the application rather than to the frame host that owns it.
+std::vector<AudioProcess> EnumWindowedApps();
+
+// What an application block offers to capture, in the order it offers them.
+//
+// Three groups, because "which programs could this block capture" has three
+// different answers and only one of them used to be asked. What is playing
+// right now is the narrowest: a program that is running with nothing to hear
+// yet has no audio session at all, and nor does one whose only sounds go
+// through the system sounds session, which belongs to no process. So the
+// programs with a window come next, and then the names the block already has
+// that are neither - a program chosen yesterday should not fall off the list
+// because it happens to be quiet today.
+//
+// `everything` adds the rest of the process table: the programs with no window
+// and nothing to hear yet, which is how a program that ought to be in the list
+// and is not can still be found without typing its name.
+//
+// FastRoute itself is never offered, nor is anything it was started from:
+// capturing one would take this process's own output with it.
+struct AppCandidate
+{
+    std::wstring exeName;
+    std::wstring displayName;   // window title or audio session name, if any
+    bool playing = false;       // has an audio session now
+    bool running = false;       // in the process table at all
+};
+std::vector<AppCandidate> AppCandidates(const std::vector<std::wstring>& ticked,
+                                        bool everything);
+
 // The endpoint an empty id resolves to, so two blocks naming the same device
 // different ways can still be compared.
 std::wstring DefaultEndpointId(bool render);

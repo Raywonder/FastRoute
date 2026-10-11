@@ -273,7 +273,7 @@ BEGIN
     PUSHBUTTON      "Cancel", IDCANCEL, 183, 47, 50, 16
 END
 
-IDD_BLOCK_APP DIALOGEX 0, 0, 300, 316
+IDD_BLOCK_APP DIALOGEX 0, 0, 300, 322
 STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "Application Input Block"
 FONT 9, "Segoe UI", 400, 0, 0x1
@@ -291,6 +291,8 @@ BEGIN
                     WS_TABSTOP | WS_GROUP, 7, 67, 286, 108
     PUSHBUTTON      "A&dd Application...", IDC_APP_ADD, 7, 179, 90, 16
     PUSHBUTTON      "&Refresh", IDC_BTN_REFRESH, 103, 179, 58, 16
+    CONTROL         "S&how every running program", IDC_APP_ALL, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 167, 182, 126, 12
     LTEXT           "", IDC_APP_NOTE, 7, 201, 286, 42
     CONTROL         "Block e&nabled", IDC_BLOCK_ENABLED, "Button",
                     BS_AUTOCHECKBOX | WS_TABSTOP, 7, 247, 200, 12
@@ -298,9 +300,9 @@ BEGIN
     CONTROL         "", IDC_VOL_SLIDER, "msctls_trackbar32",
                     TBS_HORZ | TBS_AUTOTICKS | WS_TABSTOP, 7, 275, 190, 22
     LTEXT           "100%", IDC_VOL_TEXT, 203, 281, 58, 9
-    PUSHBUTTON      "&Apply",  IDC_APPLY, 129, 294, 50, 16
-    DEFPUSHBUTTON   "OK",     IDOK,     186, 294, 50, 16
-    PUSHBUTTON      "Cancel", IDCANCEL, 243, 294, 50, 16
+    PUSHBUTTON      "&Apply",  IDC_APPLY, 129, 300, 50, 16
+    DEFPUSHBUTTON   "OK",     IDOK,     186, 300, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 243, 300, 50, 16
 END
 
 IDD_BLOCK_DEVICE DIALOGEX 0, 0, 268, 122

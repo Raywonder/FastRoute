@@ -151,7 +151,49 @@ void CALLBACK HookProc(HWINEVENTHOOK, DWORD event, HWND hwnd,
     ForegroundNote(hwnd);
 }
 
+// One pass of EnumWindows, collecting the processes behind the windows a
+// person would say are on screen. Visible, titled, unowned and not a tool
+// window: between them those four leave out the invisible message-only windows
+// every process has, the dialogs that belong to a window already counted, and
+// the floating palettes that are part of one.
+BOOL CALLBACK CollectApp(HWND w, LPARAM lp)
+{
+    std::vector<AudioProcess>* out =
+        reinterpret_cast<std::vector<AudioProcess>*>(lp);
+
+    if (!IsWindowVisible(w)) return TRUE;
+    if (GetWindow(w, GW_OWNER)) return TRUE;
+    if (GetWindowLongW(w, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) return TRUE;
+    const int len = GetWindowTextLengthW(w);
+    if (len <= 0) return TRUE;
+
+    unsigned long pid = 0;
+    std::wstring name;
+    if (!TargetFor(w, &pid, &name)) return TRUE;
+
+    for (const AudioProcess& e : *out) if (e.pid == pid) return TRUE;
+
+    AudioProcess ap;
+    ap.pid = pid;
+    ap.exeName = name;
+
+    std::wstring title((size_t)len + 1, L' ');
+    const int got = GetWindowTextW(w, &title[0], len + 1);
+    title.resize(got > 0 ? (size_t)got : 0);
+    ap.displayName = title;
+
+    out->push_back(ap);
+    return TRUE;
+}
+
 }   // namespace
+
+std::vector<AudioProcess> EnumWindowedApps()
+{
+    std::vector<AudioProcess> out;
+    EnumWindows(CollectApp, reinterpret_cast<LPARAM>(&out));
+    return out;
+}
 
 bool ForegroundCandidate(const std::wstring& windowClass, const std::wstring& exeName)
 {
