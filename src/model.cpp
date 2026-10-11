@@ -338,9 +338,11 @@ std::wstring Block::ParamSummary() const
         const std::vector<std::wstring> who = AppTargets(*this);
         if (who.empty())
             return FormatW(L"(not set), volume %d%%", volumePct);
+        const wchar_t* wait = appWaitForStart ? L", waiting for them to start"
+                                             : L"";
         if (who.size() == 1)
-            return FormatW(L"%s and its child processes, volume %d%%",
-                           who[0].c_str(), volumePct);
+            return FormatW(L"%s and its child processes%s, volume %d%%",
+                           who[0].c_str(), wait, volumePct);
         // Named in full rather than counted: "3 applications" would mean
         // opening the block to find out which three.
         std::wstring list;
@@ -349,8 +351,8 @@ std::wstring Block::ParamSummary() const
             if (i) list += (i + 1 == who.size()) ? L" and " : L", ";
             list += who[i];
         }
-        return FormatW(L"%s, each with its child processes, volume %d%%",
-                       list.c_str(), volumePct);
+        return FormatW(L"%s, each with its child processes%s, volume %d%%",
+                       list.c_str(), wait, volumePct);
     }
     if (typeId == BT_INPUT_DEVICE || typeId == BT_OUTPUT_DEVICE)
     {
@@ -1045,6 +1047,7 @@ void SessionStore::Load()
                             std::wstring n = e.AsText();
                             if (!n.empty()) b.appNames.push_back(n);
                         }
+                b.appWaitForStart = jb.AsBool(L"appWait", false);
                 b.url          = jb.AsString(L"url");
                 b.bufferMs     = jb.AsInt(L"bufferMs", 1000);
                 b.reconnect    = jb.AsBool(L"reconnect", true);
@@ -1321,6 +1324,7 @@ bool SessionStore::Save(std::wstring* err) const
                         names.Push(Json::Str(n));
                     jb.Set(L"appNames", std::move(names));
                 }
+                if (b.appWaitForStart) jb.Set(L"appWait", Json::Bool(true));
             }
             if (b.typeId == BT_INPUT_STREAM)
             {

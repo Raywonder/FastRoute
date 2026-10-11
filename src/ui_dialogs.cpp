@@ -327,6 +327,7 @@ static void AppModeState(HWND dlg)
     EnableWindow(GetDlgItem(dlg, IDC_APP_LABEL), named);
     EnableWindow(GetDlgItem(dlg, IDC_APP_ADD), named);
     EnableWindow(GetDlgItem(dlg, IDC_APP_ALL), named);
+    EnableWindow(GetDlgItem(dlg, IDC_APP_WAIT), named);
     EnableWindow(GetDlgItem(dlg, IDC_BTN_REFRESH), named);
 }
 
@@ -347,12 +348,20 @@ static void AppCountNote(HWND dlg, AppCtx* ctx)
                L"every running program; for one that is not started yet, use "
                L"Add Application and type its name.";
     else if (n == 1)
-        note = L"One application, captured with its child processes.";
+        note = IsDlgButtonChecked(dlg, IDC_APP_WAIT) == BST_CHECKED
+            ? L"One application, captured with its child processes. The session "
+              L"will run whether or not it is started yet, and will pick it up "
+              L"when it launches."
+            : L"One application, captured with its child processes.";
     else
         note = FormatW(L"%zu applications, each captured with its child "
                        L"processes and mixed together in this one block. One "
                        L"of them not running is not a problem: it joins the "
-                       L"mix when it starts.", n);
+                       L"mix when it starts.%s", n,
+                       IsDlgButtonChecked(dlg, IDC_APP_WAIT) == BST_CHECKED
+                           ? L" Nor is none of them running, since this block "
+                             L"is set to wait."
+                           : L"");
     SetDlgItemTextW(dlg, IDC_APP_NOTE, note.c_str());
 }
 
@@ -378,6 +387,8 @@ static INT_PTR CALLBACK AppDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
             SendMessageW(list, LVM_INSERTCOLUMNW, 0, (LPARAM)&col);
         }
         FillAppList(dlg, ctx, AppTargets(*ctx->block));
+        CheckDlgButton(dlg, IDC_APP_WAIT,
+                       ctx->block->appWaitForStart ? BST_CHECKED : BST_UNCHECKED);
         CheckRadioButton(dlg, IDC_APP_MODE_NAMED, IDC_APP_MODE_FOLLOW,
                          ctx->block->appSource == AS_FOLLOW     ? IDC_APP_MODE_FOLLOW :
                          ctx->block->appSource == AS_FOREGROUND ? IDC_APP_MODE_FRONT
@@ -429,6 +440,12 @@ static INT_PTR CALLBACK AppDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
             SetFocus(GetDlgItem(dlg, IDC_APP_LIST));
             return TRUE;
 
+        case IDC_APP_WAIT:
+            // Only the note changes: what to wait for is the list, and the
+            // list is the same either way.
+            AppCountNote(dlg, ctx);
+            return TRUE;
+
         case IDC_APP_ALL:
             // Focus stays on the checkbox that was just toggled. The list is
             // next along, and being moved there instead would make it hard to
@@ -465,6 +482,8 @@ static INT_PTR CALLBACK AppDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
                 ctx->block->processId = 0;
             }
             ctx->block->appSource   = mode;
+            ctx->block->appWaitForStart =
+                IsDlgButtonChecked(dlg, IDC_APP_WAIT) == BST_CHECKED;
             ctx->block->enabled     = IsDlgButtonChecked(dlg, IDC_BLOCK_ENABLED) == BST_CHECKED;
             ctx->block->volumePct   = ReadVolumeSlider(dlg);
             FinishBlockEdit(dlg, LOWORD(wp));

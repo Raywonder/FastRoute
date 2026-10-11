@@ -384,6 +384,11 @@ struct Block
     // is what a session saved before this existed has. AppTargets is the only
     // thing that should decide between the two.
     std::vector<std::wstring> appNames;
+    // Whether the block may start with none of them running. A session that
+    // records a game is set up before the game is launched, and the capture
+    // already picks a program up when it starts, so refusing to run was the
+    // only thing in the way.
+    bool appWaitForStart = false;
 
     // input.stream
     std::wstring url;           // http or https, an audio stream or a file

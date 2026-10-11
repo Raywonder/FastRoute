@@ -347,6 +347,7 @@
 #define IDC_APP_LIST            1330
 #define IDC_APP_ADD             1331
 #define IDC_APP_ALL             1332
+#define IDC_APP_WAIT            1333
 
 // Ten band EQ: one slider and one readout per band, contiguous so the band
 // index is just the control id minus the base.

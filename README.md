@@ -255,6 +255,25 @@ leaves it when it stops. A games block where only one game is ever running is
 therefore normal rather than broken, and only none of them running at all is
 worth an error.
 
+### Starting before the thing you are recording
+
+**Wait for them to start rather than refusing to run** removes that last error
+too. A session set up to record a game is set up *before* the game is launched:
+start the session, say what you are about to play, then launch it. Without this
+the session refuses to start at all, so the talking has to happen after the
+launch or not be recorded.
+
+It works for a block naming one program as much as for a block naming ten. The
+machinery is the same either way - the rescanning capture, which is what
+already lets a second game join a block that is running - so the only thing the
+option changes is whether an empty mix at the start is an error or a wait.
+
+What it costs is the warning. A block that is told to wait cannot tell a program
+that has not started yet from a name spelled wrongly: both are simply absent,
+and the session runs and records silence either way. A block that is not told to
+wait says *so-and-so is not running* and stops, which is the right answer while
+a session is being set up and the wrong one while it is being used.
+
 What this is for is a block per *kind* of thing rather than per program. A
 recording session can have a microphone block, a screen reader block naming
 every screen reader, and a game block naming every game, and each block is one

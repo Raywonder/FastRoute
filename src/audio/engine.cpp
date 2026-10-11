@@ -39,9 +39,12 @@ std::wstring Engine::KeyFor(const Block& b)
         // point is that the process changes underneath it.
         if (b.appSource != AS_NAMED) return FormatW(L"app|mode%d", b.appSource);
     {
+        // Waiting is in the key because it decides which capture is built -
+        // the rescanning one or the fixed single - and not merely what that
+        // capture carries.
         std::wstring key = L"app|";
         for (const std::wstring& n : AppTargets(b)) key += n + L"|";
-        return key + b.processName;
+        return key + b.processName + (b.appWaitForStart ? L"|wait" : L"");
     }
     }
     if (b.typeId == BT_INPUT_DEVICE)
@@ -226,22 +229,37 @@ bool Engine::ApplySession(const Session& s, std::wstring* err, bool* graphIntact
                 }
             }
 
-            if (want.size() > 1)
+            // The rescanning capture takes a program into the mix when it
+            // starts and drops it when it stops, so a block told to wait does
+            // not need anything running at all - including a block naming one
+            // program, which would otherwise take the fixed single capture
+            // below and need a process id now.
+            //
+            // Nothing that starts later can be an ancestor of a process that
+            // is already running, so the check above is the whole of it: what
+            // joins the mix afterwards can only be a descendant or unrelated,
+            // and Targets() leaves this process itself out.
+            if (want.size() > 1 || b.appWaitForStart)
             {
-                // One capture per program, rescanned, so a program named here
-                // that is not running yet joins the mix when it starts. That
-                // is the point of a block naming several: a games block where
-                // only one game is ever running at a time is normal, so the
-                // ones that are not running are not an error.
-                int running = 0;
-                for (const std::wstring& name : want)
-                    if (FindProcessIdByName(name)) ++running;
-                if (running == 0)
+                // One capture per program, rescanned. That is the point of a
+                // block naming several: a games block where only one game is
+                // ever running at a time is normal, so the ones that are not
+                // running are not an error.
+                if (!b.appWaitForStart)
                 {
-                    if (err) *err = FormatW(
-                        L"None of the %zu applications in this block is running, "
-                        L"so there is nothing to capture yet.", want.size());
-                    return false;
+                    int running = 0;
+                    for (const std::wstring& name : want)
+                        if (FindProcessIdByName(name)) ++running;
+                    if (running == 0)
+                    {
+                        if (err) *err = FormatW(
+                            L"None of the %zu applications in this block is "
+                            L"running, so there is nothing to capture yet. Tick "
+                            L"\"Wait for them to start\" in the block to run "
+                            L"anyway and pick them up as they launch.",
+                            want.size());
+                        return false;
+                    }
                 }
                 n->capture = MakeMultiAppCapture(want, m_rate);
                 if (!n->capture->Start(err)) return false;
@@ -253,8 +271,9 @@ bool Engine::ApplySession(const Session& s, std::wstring* err, bool* graphIntact
                 if (pid == 0)
                 {
                     if (err) *err = FormatW(
-                        L"%s is not running, so it cannot be captured.",
-                        only.c_str());
+                        L"%s is not running, so it cannot be captured. Tick "
+                        L"\"Wait for them to start\" in the block to run anyway "
+                        L"and pick it up when it launches.", only.c_str());
                     return false;
                 }
                 n->capture = MakeProcessLoopback(pid, m_rate);
