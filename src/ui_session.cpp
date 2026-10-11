@@ -507,7 +507,8 @@ static void CmdBlockHotkey(HWND dlg)
     Block& b = s->blocks[(size_t)i];
     Hotkey want = b.hotkey;
     if (!EditHotkey(dlg, FormatW(L"the %s block in %s",
-                                 b.TypeName().c_str(), s->name.c_str()), want))
+                                 b.TypeName().c_str(), s->name.c_str()),
+                    want, HF_BLOCK))
         return;
 
     b.hotkey = want;

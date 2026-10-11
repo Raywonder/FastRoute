@@ -387,7 +387,8 @@ static void CmdSessionHotkey(HWND dlg)
     if (!s) return;
 
     Hotkey want = s->hotkey;
-    if (!EditHotkey(dlg, FormatW(L"running the session %s", s->name.c_str()), want))
+    if (!EditHotkey(dlg, FormatW(L"running the session %s", s->name.c_str()),
+                    want, HF_SESSION))
         return;
 
     s->hotkey = want;

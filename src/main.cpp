@@ -138,6 +138,11 @@ void RunStartupSessions()
         g_engines[s.id] = std::move(e);
     }
     RefreshMainList();
+    // These started without going through NotifySessionStateChanged, and a
+    // block action's hotkey is only registered while its session runs - so
+    // without this a session that runs at startup would have none of its
+    // action keys until it was next stopped and started.
+    if (g_mainDlg) RefreshItemHotkeys(g_mainDlg);
 }
 
 // ---------------------------------------------------------------------------
@@ -212,4 +217,10 @@ void NotifySessionStateChanged(int sessionId)
 {
     RefreshMainList();
     RefreshSessionWindow(sessionId);
+    // A block action's hotkey is only registered while its session runs, so
+    // the table has to be rebuilt when that changes. Guarded on the window
+    // because the registrations are owned by it: with no owner there is
+    // nothing to unregister them from, and clearing the table would leave
+    // them held with nothing pointing at them.
+    if (g_mainDlg) RefreshItemHotkeys(g_mainDlg);
 }

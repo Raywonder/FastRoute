@@ -1667,6 +1667,35 @@ message per key. Two window keys set to the same combination are reported the
 same way: only the first would ever fire, and the second silently doing nothing
 is worse than being told.
 
+### One key, every session
+
+A **block action's** hotkey - rewind, forward, back to live, save the buffer -
+is registered only while its session is running. There was never anything for
+it to do while the session was stopped: an action is done to a running graph,
+so it answered with the low tone and changed nothing. Leaving it unregistered
+the rest of the time has two consequences worth having:
+
+* the same key can mean *save the buffer* in every session you have, as long as
+  only one of them is running at a time; and
+* a key you only use while recording is not taken from the rest of the machine
+  while you are not recording.
+
+Two *running* sessions claiming one key are still a clash, and reported as one.
+A key cannot mean two things at once.
+
+A block's own on/off hotkey is deliberately **not** treated this way. Switching
+a block off is an edit to the document rather than something done to a graph, so
+it means the same thing whether or not the session is running and it stays
+registered either way. That division was Gavin Grundlingh's suggestion.
+
+The hotkey window says which of the three kinds you are setting and what it
+will therefore do, because the fields are identical for all three and the
+sentence underneath is the only thing that tells them apart.
+
+The table is rebuilt whenever a session starts or stops as well as on every
+save, and the clash report goes to the error log only when it *changes* - a key
+another program holds for good would otherwise be reported on every run.
+
 A session started from a hotkey that fails - because the application it
 captures is not running, say - reports to the error log and answers with the
 low tone, rather than putting a modal box in front of whatever you were doing.

@@ -297,6 +297,20 @@ void RefreshItemHotkeys(HWND owner)
     for (const Session& s : g_store.sessions)
     {
         take(s.hotkey, s.id, -1, -1, FormatW(L"running %s", s.name.c_str()));
+
+        // A block action is done to a running graph and there has never been
+        // anything for it to do while the session is stopped - it answered
+        // with the low tone and changed nothing. So it is only registered
+        // while that session runs, which leaves the key to another session's
+        // action, and to every other program, the rest of the time. One key
+        // can therefore mean "save the buffer" in every session there is.
+        //
+        // A block's own on/off key is deliberately not treated this way.
+        // Turning a block off is an edit to the document rather than something
+        // done to the graph, and it means what it means whether or not the
+        // session is running.
+        const bool running = SessionRunning(s.id);
+
         for (size_t i = 0; i < s.blocks.size(); ++i)
         {
             const Block& blk = s.blocks[i];
@@ -304,6 +318,7 @@ void RefreshItemHotkeys(HWND owner)
                  FormatW(L"the %s block in %s", blk.TypeName().c_str(),
                          s.name.c_str()));
 
+            if (!running) continue;
             for (int a : BlockActionsFor(blk.typeId))
                 take(blk.actionKey[a], s.id, (int)i, a,
                      FormatW(L"%s on the %s block in %s", BlockActionName(a),
@@ -311,10 +326,19 @@ void RefreshItemHotkeys(HWND owner)
         }
     }
 
-    if (!clashes.empty())
-        LogError(L"These hotkeys are not in use. A global one is most likely "
-                 L"already taken by another program; a window one is already "
-                 L"used by something else in FastRoute:" + clashes);
+    // Said when it changes, not every time the table is rebuilt. The table is
+    // rebuilt on every session start and stop now, and a key some other
+    // program holds for good would otherwise write the same entry into the
+    // log every time a session was run.
+    static std::wstring g_saidClashes;
+    if (clashes != g_saidClashes)
+    {
+        g_saidClashes = clashes;
+        if (!clashes.empty())
+            LogError(L"These hotkeys are not in use. A global one is most likely "
+                     L"already taken by another program; a window one is already "
+                     L"used by something else in FastRoute:" + clashes);
+    }
 }
 
 // 800 Hz for on and 400 Hz for off. It is the only feedback there is when the
@@ -461,7 +485,13 @@ bool TrayHandleMessage(HWND owner, UINT msg, WPARAM wp, LPARAM lp)
     {
         if ((int)wp == kHotkeyId) { ToggleTray(owner); return true; }
         for (const Binding& b : g_bindings)
-            if (b.id == (int)wp) return FireBinding(b);
+            if (b.id == (int)wp)
+            {
+                // By value. Firing this can start or stop a session, and that
+                // now rebuilds the very table the reference points into.
+                const Binding fire = b;
+                return FireBinding(fire);
+            }
         return false;
     }
 

@@ -106,8 +106,17 @@ void FinishBlockEdit(HWND dlg, int cmd);
 // An external plugin's parameters, and its own editor. Its own file, because
 // it is the only dialog that has to load somebody else's code to draw itself.
 bool EditPluginBlock(HWND parent, Block& b);
+// Which of the three things a hotkey is for. The fields are the same for all
+// of them; what differs is the sentence underneath, and an action key really
+// does behave differently - it is only registered while its session runs.
+enum HotkeyFor
+{
+    HF_SESSION = 0,     // starts and stops the session
+    HF_BLOCK   = 1,     // switches one block on and off
+    HF_ACTION  = 2,     // does something to a running block
+};
 // `what` completes "Hotkey for ..." and is read out with the dialog.
-bool EditHotkey(HWND parent, const std::wstring& what, Hotkey& hk);
+bool EditHotkey(HWND parent, const std::wstring& what, Hotkey& hk, int forWhat);
 
 // Ctrl+Shift+O: show the folder a session's Recorder block writes into.
 // `preferBlock` is the block the user has selected, or -1 when there is no

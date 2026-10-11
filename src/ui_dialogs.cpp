@@ -1963,7 +1963,8 @@ static INT_PTR CALLBACK ActionsDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
             Hotkey want = ctx->keys[a];
             if (EditHotkey(dlg, FormatW(L"%s on the %s block",
                                         BlockActionName(a),
-                                        ctx->block->TypeName().c_str()), want))
+                                        ctx->block->TypeName().c_str()),
+                           want, HF_ACTION))
             {
                 ctx->keys[a] = want;
                 FillActionList(dlg, ctx);
@@ -3830,15 +3831,54 @@ struct HotkeyCtx
 {
     std::wstring what;
     Hotkey* hk;
+    int forWhat = HF_BLOCK;
 };
 
-// Said in three places, and it has to read the same in all of them.
-static void SyncItemHotkeyFields(HWND dlg)
+// The running commentary under the fields. The three kinds do three different
+// things, and an action key is also the only one whose registration comes and
+// goes, so saying "switches it on and off" for all of them would be wrong
+// about two of them.
+static void SyncItemHotkeyFields(HWND dlg, int forWhat)
 {
+    if (forWhat == HF_SESSION)
+    {
+        SyncHotkeyFields(dlg,
+            L"will start the session from whatever you are using at the time, "
+                L"and stop it again when it is running, with a high tone for "
+                L"started and a low one for stopped. It is taken from every "
+                L"other program for as long as FastRoute is running.",
+            L"This has no hotkey, so the session can only be started from "
+                L"FastRoute's own window.",
+            L"will start and stop the session while a FastRoute window is in "
+                L"front, with a high tone for started and a low one for "
+                L"stopped. Every other program keeps that key.");
+        return;
+    }
+
+    if (forWhat == HF_ACTION)
+    {
+        SyncHotkeyFields(dlg,
+            L"will do it while the session is running, with a high tone if it "
+                L"was done and a low one if there was nothing to do it to. "
+                L"Because there is nothing to act on while the session is "
+                L"stopped, the key is only taken from other programs while "
+                L"that session runs - so the same key can do the same thing in "
+                L"every session you have, as long as one of them is running at "
+                L"a time.",
+            L"This has no hotkey, so it can only be done from FastRoute's own "
+                L"window.",
+            L"will do it while a FastRoute window is in front and the session "
+                L"is running, with a high tone if it was done and a low one if "
+                L"there was nothing to do it to. Every other program keeps that "
+                L"key, and so does every session of yours that is not running.");
+        return;
+    }
+
     SyncHotkeyFields(dlg,
         L"will switch it on and off from whatever you are using at the time, "
             L"with a high tone for on and a low one for off. It is taken from "
-            L"every other program for as long as FastRoute is running.",
+            L"every other program for as long as FastRoute is running, whether "
+            L"or not the session is.",
         L"This has no hotkey, so it can only be changed from FastRoute's own "
             L"window.",
         L"will switch it on and off while a FastRoute window is in front, with "
@@ -3858,7 +3898,7 @@ static INT_PTR CALLBACK HotkeyDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
         SetDlgItemTextW(dlg, IDC_HK_WHAT,
                         FormatW(L"Hotkey for %s.", ctx->what.c_str()).c_str());
         FillHotkeyFields(dlg, *ctx->hk);
-        SyncItemHotkeyFields(dlg);
+        SyncItemHotkeyFields(dlg, ctx->forWhat);
         return TRUE;
 
     case WM_COMMAND:
@@ -3872,8 +3912,8 @@ static INT_PTR CALLBACK HotkeyDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
         case IDC_HK_SCOPE_GLOBAL:
         case IDC_HK_SCOPE_WINDOW:
         case IDC_HK_KEY:
-            if (LOWORD(wp) != IDC_HK_KEY || HIWORD(wp) == EN_CHANGE)
-                SyncItemHotkeyFields(dlg);
+            if (ctx && (LOWORD(wp) != IDC_HK_KEY || HIWORD(wp) == EN_CHANGE))
+                SyncItemHotkeyFields(dlg, ctx->forWhat);
             return TRUE;
 
         case IDOK:
@@ -3900,9 +3940,9 @@ static INT_PTR CALLBACK HotkeyDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
     return FALSE;
 }
 
-bool EditHotkey(HWND parent, const std::wstring& what, Hotkey& hk)
+bool EditHotkey(HWND parent, const std::wstring& what, Hotkey& hk, int forWhat)
 {
-    HotkeyCtx ctx{ what, &hk };
+    HotkeyCtx ctx{ what, &hk, forWhat };
     return DialogBoxParamW(g_inst, MAKEINTRESOURCEW(IDD_HOTKEY), parent,
                            HotkeyDlgProc, reinterpret_cast<LPARAM>(&ctx)) == IDOK;
 }
