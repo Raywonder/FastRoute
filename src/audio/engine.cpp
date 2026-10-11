@@ -97,8 +97,10 @@ std::wstring Engine::KeyFor(const Block& b)
     {
         // Anything that changes where the audio lands has to start a new file,
         // so it all belongs in the key. Volume and enabled deliberately do not.
-        return FormatW(L"rec|%s|%s|%d|%d", b.folder.c_str(), b.nameTemplate.c_str(),
-                       b.recFormat, b.bitrateKbps);
+        // The mode is in it because it decides whether this block writes a
+        // mixed file at all.
+        return FormatW(L"rec|%s|%s|%d|%d|%d", b.folder.c_str(), b.nameTemplate.c_str(),
+                       b.recFormat, b.bitrateKbps, b.recMode);
     }
     return b.typeId;
 }
@@ -358,10 +360,59 @@ bool Engine::ApplySession(const Session& s, std::wstring* err, bool* graphIntact
         }
         else if (b.typeId == BT_OUT_RECORDER)
         {
-            n->rec.reset(new RecordSink());
-            if (!n->rec->Start(RecordSettingsFor(b, s.name), m_rate, err)) return false;
+            // Writing a track per block and no mix means this block has no
+            // file of its own: the files hang off the input blocks instead.
+            if (b.recMode != RM_TRACKS)
+            {
+                n->rec.reset(new RecordSink());
+                if (!n->rec->Start(RecordSettingsFor(b, s.name), m_rate, err)) return false;
+            }
         }
         created[i] = std::move(n);
+    }
+
+    // ---- Phase B2: a file per input block, where one is asked for ---------
+    //
+    // This is the one thing the key-based reuse above cannot work out for
+    // itself, because it depends on blocks other than the one being built: an
+    // input block's own track exists because of a *recorder* further down the
+    // list. So it is settled here, once the arrangement is known, and the
+    // sinks are opened before the lock is taken - opening one waits for the
+    // file, and the audio thread must not.
+    std::vector<std::unique_ptr<RecordSink>> newTracks(count);
+    std::vector<std::wstring> wantTrack(count);
+    std::vector<const Block*> askedBy(count, nullptr);
+    {
+        const std::vector<std::wstring> trackName = TrackNamesFor(s.blocks);
+        for (size_t i = 0; i < count; ++i)
+        {
+            if (trackName[i].empty()) continue;
+
+            // The recorder that asked - the first one below this block that
+            // wants tracks, which is the same one TrackNamesFor found.
+            const Block* asked = nullptr;
+            for (size_t j = i + 1; j < count; ++j)
+                if (s.blocks[j].typeId == BT_OUT_RECORDER &&
+                    s.blocks[j].recMode != RM_MIXED)
+                {
+                    asked = &s.blocks[j];
+                    break;
+                }
+            if (!asked) continue;
+            askedBy[i] = asked;
+
+            wantTrack[i] = KeyFor(*asked) + L"|" + trackName[i];
+
+            Node* live = (reuse[i] != kNone) ? m_nodes[reuse[i]].get() : nullptr;
+            if (live && live->trackRec && live->trackKey == wantTrack[i])
+                continue;                       // already writing the right file
+
+            std::unique_ptr<RecordSink> sink(new RecordSink());
+            if (!sink->Start(TrackSettingsFor(*asked, s.name, trackName[i]),
+                             m_rate, err))
+                return false;
+            newTracks[i] = std::move(sink);
+        }
     }
 
     // ---- Phase C: work out who owns the clock -----------------------------
@@ -401,6 +452,7 @@ bool Engine::ApplySession(const Session& s, std::wstring* err, bool* graphIntact
 
     // ---- Phase E: swap the graph ------------------------------------------
     std::vector<std::unique_ptr<Node>> retired;
+    std::vector<std::unique_ptr<RecordSink>> retiredSinks;
     {
         std::lock_guard<std::mutex> lock(m_graph);
 
@@ -416,14 +468,34 @@ bool Engine::ApplySession(const Session& s, std::wstring* err, bool* graphIntact
             {
                 next[i]->fx->Configure(s.blocks[i]);
                 // The buffer saves files of its own, and wants the same
-                // answer a Recorder block in this session would get.
-                next[i]->fx->ConfigureRecording(RecordSettingsFor(s.blocks[i], s.name));
+                // answer a Recorder block in this session would get - with
+                // {block} filled in, since for a buffer there is exactly one
+                // block the file is of and it is this one.
+                RecordSettings rs = RecordSettingsFor(s.blocks[i], s.name);
+                rs.blockName = s.blocks[i].TypeName();
+                next[i]->fx->ConfigureRecording(rs);
             }
             if (next[i]->capture) next[i]->capture->Configure(s.blocks[i]);
             // The gate and the splitting are live: they do not decide which
             // file is open, so changing them must not start a new one.
             if (next[i]->rec) next[i]->rec->Configure(RecordSettingsFor(s.blocks[i], s.name));
             if (next[i]->net) next[i]->net->Configure(s.blocks[i]);
+
+            // A track that is no longer wanted, or is wanted in a different
+            // file, is moved out to be closed once the lock is released. A
+            // new one is a pointer move, which is all this may cost here.
+            if (next[i]->trackRec && next[i]->trackKey != wantTrack[i])
+                retiredSinks.push_back(std::move(next[i]->trackRec));
+            if (newTracks[i])
+            {
+                next[i]->trackRec = std::move(newTracks[i]);
+                next[i]->trackKey = wantTrack[i];
+            }
+            else if (!next[i]->trackRec)
+                next[i]->trackKey.clear();
+            // A recorder switched off pauses every file it is writing, its
+            // own and the tracks alike.
+            next[i]->trackOn.store(askedBy[i] ? askedBy[i]->enabled : true);
         }
         for (std::unique_ptr<Node>& n : m_nodes)
             if (n) retired.push_back(std::move(n));
@@ -483,6 +555,10 @@ bool Engine::ApplySession(const Session& s, std::wstring* err, bool* graphIntact
     }
 
     retired.clear();   // destructors stop the streams no longer in the graph
+    // Out of the graph, so nothing is writing to them any more. Closing one
+    // finalises an encoder, which is why it is not done under the lock.
+    for (std::unique_ptr<RecordSink>& r : retiredSinks) if (r) r->Stop();
+    retiredSinks.clear();
     return true;
 }
 
@@ -503,7 +579,11 @@ void Engine::Stop()
         m_master = kNone;
     }
     for (std::unique_ptr<Node>& n : retired)
-        if (n && n->rec) n->rec->Stop();     // flush and close the files
+    {
+        if (!n) continue;
+        if (n->rec) n->rec->Stop();          // flush and close the files
+        if (n->trackRec) n->trackRec->Stop();
+    }
     retired.clear();
     // The nodes are gone, so whatever was holding the ASIO driver has let go
     // of it; this closes it. A driver left open is one no other program can
@@ -548,15 +628,19 @@ void Engine::GetStatus(Status* st)
             if (!line.empty()) st->blockStatus.push_back(line);
         }
         if (n->capture && st->following.empty()) st->following = n->capture->TargetName();
-        if (n->rec)
+        // With several recordings going, the one that has written most is the
+        // one worth reporting: it is the recording somebody is waiting on. The
+        // file count already adds them all up. A block's own track counts the
+        // same as a recorder's mixed file - from the outside they are both
+        // just files being written.
+        RecordSink* sinks[2] = { n->rec.get(), n->trackRec.get() };
+        for (RecordSink* r : sinks)
         {
-            // With several recorder blocks, the one that has written most is
-            // the one worth reporting: it is the recording someone is waiting
-            // on. The file count already adds them all up.
-            const unsigned long long f = n->rec->RecordedFrames();
+            if (!r) continue;
+            const unsigned long long f = r->RecordedFrames();
             const int secs = m_rate > 0 ? (int)(f / (unsigned long long)m_rate) : 0;
             if (secs > st->recSeconds) st->recSeconds = secs;
-            const unsigned long long b = n->rec->FileBytes();
+            const unsigned long long b = r->FileBytes();
             if (b > st->recBytes) st->recBytes = b;
         }
     }
@@ -579,11 +663,15 @@ void Engine::GetStatus(Status* st)
     st->inPacketFrames = (int)packet;
 
     for (std::unique_ptr<Node>& n : m_nodes)
-        if (n->rec)
+    {
+        RecordSink* sinks[2] = { n->rec.get(), n->trackRec.get() };
+        for (RecordSink* r : sinks)
         {
-            st->recFiles += n->rec->Files();
-            if (n->rec->Skipping()) st->recSkipping = true;
+            if (!r) continue;
+            st->recFiles += r->Files();
+            if (r->Skipping()) st->recSkipping = true;
         }
+    }
 
     unsigned glitches = 0;
     for (std::unique_ptr<Node>& n : m_nodes)
@@ -613,6 +701,7 @@ void Engine::Render(float* out, size_t frames)
         m_bus.resize(samples);
         m_tmp.resize(samples);
         m_out.resize(samples);
+        m_trk.resize(samples);
     }
     std::fill(m_bus.begin(), m_bus.begin() + samples, 0.0f);
     std::fill(out, out + samples, 0.0f);
@@ -636,6 +725,24 @@ void Engine::Render(float* out, size_t frames)
             n.capture->Read(m_tmp.data(), frames);
             if (on)
                 for (size_t i = 0; i < samples; ++i) m_bus[i] += m_tmp[i] * g;
+
+            // This block's own file, when a recorder below it asked for one.
+            // It is what the block contributes to the mix and nothing else:
+            // its own level applied, nothing further down the list, and
+            // silence rather than nothing while it is switched off - a track
+            // that stopped being written would no longer line up with the
+            // others, which is the whole reason for having them separate.
+            if (n.trackRec && n.trackOn.load())
+            {
+                for (size_t i = 0; i < samples; ++i)
+                {
+                    float v = on ? m_tmp[i] * g : 0.0f;
+                    if (v > 1.0f) v = 1.0f;
+                    else if (v < -1.0f) v = -1.0f;
+                    m_trk[i] = v;
+                }
+                n.trackRec->Write(m_trk.data(), frames);
+            }
         }
         else if (n.kind == BlockKind::Effect)
         {

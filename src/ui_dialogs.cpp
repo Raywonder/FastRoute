@@ -1117,11 +1117,47 @@ static void SyncBitrateField(HWND dlg)
     EnableWindow(GetDlgItem(dlg, IDC_REC_KBPS_LABEL), lossy);
 }
 
+// Which of the three the combo is on. Position is the value, which is why the
+// RM_ constants are 0, 1 and 2 in that order.
+static int SelectedRecMode(HWND dlg)
+{
+    const int m = (int)SendDlgItemMessageW(dlg, IDC_REC_MODE, CB_GETCURSEL, 0, 0);
+    return (m >= RM_MIXED && m <= RM_BOTH) ? m : RM_MIXED;
+}
+
+// What the mode means, which is not obvious from three words in a list. The
+// part worth knowing is that a track is not a slice of the mix: it is taken at
+// the input block, so nothing below that block is in it.
+static void SyncRecModeNote(HWND dlg)
+{
+    const int mode = SelectedRecMode(dlg);
+    const wchar_t* note =
+        mode == RM_MIXED
+        ? L"One file, of the audio reaching this block - every input above it, "
+          L"through every effect above it."
+        : mode == RM_TRACKS
+        ? L"A file per input block above this one, named after the block, taken "
+          L"at that block's own volume and before any effect below it. No file "
+          L"of the mix. Skipping silence and splitting by size are not applied "
+          L"to tracks: they would cut each file in a different place, and "
+          L"tracks are worth having because they line up."
+        : L"The mix in one file, and a file per input block above this one as "
+          L"well. The tracks are taken at each block's own volume, before any "
+          L"effect below it, so they are not slices of the mixed file.";
+    SetDlgItemTextW(dlg, IDC_REC_MODE_NOTE, note);
+}
+
 static void SyncRecorderFields(HWND dlg)
 {
     SyncBitrateField(dlg);
+    SyncRecModeNote(dlg);
 
-    bool gate = IsDlgButtonChecked(dlg, IDC_REC_GATE) == BST_CHECKED;
+    // The gate and splitting by size do not reach the tracks, so with no mixed
+    // file to apply them to there is nothing for them to do.
+    const bool anyMix = SelectedRecMode(dlg) != RM_TRACKS;
+    EnableWindow(GetDlgItem(dlg, IDC_REC_GATE), anyMix);
+
+    bool gate = anyMix && IsDlgButtonChecked(dlg, IDC_REC_GATE) == BST_CHECKED;
     EnableWindow(GetDlgItem(dlg, IDC_REC_GATE_SLIDER), gate);
     EnableWindow(GetDlgItem(dlg, IDC_REC_GATE_TEXT), gate);
     EnableWindow(GetDlgItem(dlg, IDC_REC_GATE_LABEL), gate);
@@ -1151,8 +1187,20 @@ static INT_PTR CALLBACK RecorderDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp
         SetWindowLongPtrW(dlg, DWLP_USER, lp);
 
         FillFileFields(dlg, b,
-                       L"Use {session}, {date}, {time}, {datetime} and {n}. "
-                       L"Leave the folder blank for your Music folder.");
+                       L"Use {session}, {block}, {date}, {time}, {datetime} and "
+                       L"{n}. Leave the folder blank for your Music folder.");
+
+        {
+            HWND mc = GetDlgItem(dlg, IDC_REC_MODE);
+            SendMessageW(mc, CB_ADDSTRING, 0, (LPARAM)L"The mix, in one file");
+            SendMessageW(mc, CB_ADDSTRING, 0,
+                         (LPARAM)L"Each input block, in a file of its own");
+            SendMessageW(mc, CB_ADDSTRING, 0,
+                         (LPARAM)L"Both: the mix, and each input block");
+            SendMessageW(mc, CB_SETCURSEL,
+                         (b->recMode >= RM_MIXED && b->recMode <= RM_BOTH)
+                             ? b->recMode : RM_MIXED, 0);
+        }
 
         CheckDlgButton(dlg, IDC_REC_GATE, b->skipSilence ? BST_CHECKED : BST_UNCHECKED);
         SetupDbSlider(dlg, IDC_REC_GATE_SLIDER, IDC_REC_GATE_TEXT, 80,
@@ -1199,6 +1247,7 @@ static INT_PTR CALLBACK RecorderDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp
         {
         case IDC_REC_FORMAT:
         case IDC_REC_SPLIT:
+        case IDC_REC_MODE:
             if (HIWORD(wp) == CBN_SELCHANGE) SyncRecorderFields(dlg);
             return TRUE;
 
@@ -1222,6 +1271,7 @@ static INT_PTR CALLBACK RecorderDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp
         {
             ReadFileFields(dlg, b);
 
+            b->recMode        = SelectedRecMode(dlg);
             b->skipSilence    = IsDlgButtonChecked(dlg, IDC_REC_GATE) == BST_CHECKED;
             b->silenceDb      = ReadSlider(dlg, IDC_REC_GATE_SLIDER);
             int hold = ReadSlider(dlg, IDC_REC_HOLD_SLIDER);
@@ -2046,8 +2096,8 @@ static INT_PTR CALLBACK BufferDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
                    kBufStepMin, kBufStepMax, b->bufStepSec, L" s", 5);
 
         FillFileFields(dlg, b,
-                       L"Use {session}, {date}, {time}, {datetime} and {n}. "
-                       L"Leave the folder blank for your Music folder.");
+                       L"Use {session}, {block}, {date}, {time}, {datetime} and "
+                       L"{n}. Leave the folder blank for your Music folder.");
         CheckDlgButton(dlg, IDC_BLOCK_ENABLED, b->enabled ? BST_CHECKED : BST_UNCHECKED);
         SyncBufferFields(dlg, b);
         return TRUE;

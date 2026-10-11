@@ -302,6 +302,33 @@ void InitBlockFrom(Block& b, const LibraryItem& item)
     }
 }
 
+std::vector<std::wstring> TrackNamesFor(const std::vector<Block>& blocks)
+{
+    std::vector<std::wstring> out(blocks.size());
+
+    for (size_t i = 0; i < blocks.size(); ++i)
+    {
+        if (blocks[i].Kind() != BlockKind::Input) continue;
+
+        bool asked = false;
+        for (size_t j = i + 1; j < blocks.size() && !asked; ++j)
+            asked = blocks[j].typeId == BT_OUT_RECORDER &&
+                    blocks[j].recMode != RM_MIXED;
+        if (!asked) continue;
+
+        // Counted over every input, asked for or not, so that a block's file
+        // keeps its name when a recorder above it stops wanting tracks.
+        const std::wstring name = blocks[i].TypeName();
+        int seen = 0;
+        for (size_t j = 0; j < i; ++j)
+            if (blocks[j].Kind() == BlockKind::Input &&
+                blocks[j].TypeName() == name) ++seen;
+
+        out[i] = seen ? FormatW(L"%s %d", name.c_str(), seen + 1) : name;
+    }
+    return out;
+}
+
 std::vector<std::wstring> AppTargets(const Block& b)
 {
     if (b.typeId != BT_INPUT_APP || b.appSource != AS_NAMED)
@@ -566,7 +593,11 @@ std::wstring Block::ParamSummary() const
             extra += FormatW(L", new file every %d minutes", splitMinutes);
         else if (splitMode == 2)
             extra += FormatW(L", new file every %d MB", splitMb);
-        return FormatW(L"%s%s, %s, \"%s\", volume %d%%%s",
+        // Said first, because it decides how many files there are at all.
+        std::wstring what;
+        if (recMode == RM_TRACKS) what = L"a file per input block, ";
+        else if (recMode == RM_BOTH) what = L"the mix and a file per input block, ";
+        return FormatW(L"%s%s%s, %s, \"%s\", volume %d%%%s", what.c_str(),
                        RecFormatShortName((RecFormat)f), bitrate.c_str(),
                        where.c_str(), tmpl.c_str(), volumePct, extra.c_str());
     }
@@ -1193,6 +1224,9 @@ void SessionStore::Load()
                 b.splitMode      = jb.AsInt(L"splitMode", 0);
                 b.splitMinutes   = jb.AsInt(L"splitMinutes", 30);
                 b.splitMb        = jb.AsInt(L"splitMb", 100);
+                b.recMode        = jb.AsInt(L"recMode", RM_MIXED);
+                if (b.recMode < RM_MIXED || b.recMode > RM_BOTH)
+                    b.recMode = RM_MIXED;
                 b.enabled     = jb.AsBool(L"enabled", true);
                 b.hotkey      = ReadHotkey(jb);
                 s.blocks.push_back(b);
@@ -1519,6 +1553,10 @@ bool SessionStore::Save(std::wstring* err) const
                 jb.Set(L"splitMode", Json::Num(b.splitMode));
                 if (b.splitMode == 1) jb.Set(L"splitMinutes", Json::Num(b.splitMinutes));
                 if (b.splitMode == 2) jb.Set(L"splitMb", Json::Num(b.splitMb));
+                // Only when it is not the mix alone, so a document a older
+                // FastRoute reads is unchanged until the feature is used - and
+                // that older one then writes the mix, which is what it did.
+                if (b.recMode != RM_MIXED) jb.Set(L"recMode", Json::Num(b.recMode));
             }
             if (!b.label.empty()) jb.Set(L"label", Json::Str(b.label));
             jb.Set(L"volume", Json::Num(b.volumePct));

@@ -571,11 +571,14 @@ std::unique_ptr<Recorder> MakeOpusRecorder();
 // is dropped from the recorder block rather than failing when you press run.
 bool RecFormatAvailable(RecFormat fmt);
 // Expands {session}, {block}, {date}, {time}, {datetime} and {n} and appends
-// the extension for `fmt`, avoiding a name that already exists.
+// the extension for `fmt`, avoiding a name that already exists. {block} comes
+// out empty when there is no one block the file is of, which is the ordinary
+// case: a recorder's mixed file is of the whole bus.
 std::wstring ResolveRecordingPath(const std::wstring& folder,
                                   const std::wstring& nameTemplate,
                                   const std::wstring& sessionName,
-                                  RecFormat fmt);
+                                  RecFormat fmt,
+                                  const std::wstring& blockName = std::wstring());
 const wchar_t* RecFormatExt(RecFormat fmt);
 
 // Everything a recorder block is set to. The first four decide which file is
@@ -586,6 +589,9 @@ struct RecordSettings
     std::wstring folder;
     std::wstring nameTemplate;
     std::wstring sessionName;
+    // Which block this file is of, for {block}. Empty for a recorder's own
+    // mixed file: there is no one block it is of.
+    std::wstring blockName;
     RecFormat fmt = RecFormat::Wav;
     int  kbps = 192;
 
@@ -599,6 +605,13 @@ struct RecordSettings
 };
 
 RecordSettings RecordSettingsFor(const Block& b, const std::wstring& sessionName);
+// The same, for one input block's own file, from the recorder block that asked
+// for it. Separate tracks are worth having because they line up, so the two
+// settings that would cut each file at a different moment - the silence gate,
+// and splitting by size - are not passed on. See TrackSettingsFor.
+RecordSettings TrackSettingsFor(const Block& recorderBlock,
+                                const std::wstring& sessionName,
+                                const std::wstring& blockName);
 
 // ---------------------------------------------------------------------------
 // One recorder block's output: the file being written, plus the silence gate
@@ -752,6 +765,19 @@ private:
         std::unique_ptr<Effect> fx;
         std::unique_ptr<RecordSink> rec;
         std::unique_ptr<NetSink> net;
+        // An input block's own file, when a Recorder below it in the list is
+        // writing a track per block. It hangs off the input rather than off
+        // the recorder because the input is the thing whose identity is
+        // stable: adding a block above a running recorder must not restart
+        // the recorder's own file. The key is the recorder's, so changing the
+        // folder or the format starts the tracks again too.
+        std::unique_ptr<RecordSink> trackRec;
+        std::wstring trackKey;
+        // Whether the recorder that asked for this track is switched on. Not
+        // the same question as this block's own enabled flag: an input can be
+        // out of the mix while the recording runs, and the recording can be
+        // paused while the input plays on.
+        std::atomic<bool> trackOn{ true };
     };
 
     static std::wstring KeyFor(const Block& b);
@@ -765,6 +791,7 @@ private:
     int m_rate = kDefaultRate;           // taken from the master endpoint
     std::mutex m_graph;                  // guards m_nodes / m_master vs Render()
     std::vector<float> m_bus, m_tmp, m_out;
+    std::vector<float> m_trk;            // one input's own audio, for its track
     // When Start() succeeded, for the running time. A tick count rather than a
     // wall clock: it cannot go backwards when the clock is put right.
     unsigned long long m_startTick = 0;

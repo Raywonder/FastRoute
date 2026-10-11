@@ -85,7 +85,8 @@ static void ReplaceAll(std::wstring& s, const std::wstring& from, const std::wst
 std::wstring ResolveRecordingPath(const std::wstring& folder,
                                   const std::wstring& nameTemplate,
                                   const std::wstring& sessionName,
-                                  RecFormat fmt)
+                                  RecFormat fmt,
+                                  const std::wstring& blockName)
 {
     SYSTEMTIME t;
     GetLocalTime(&t);
@@ -96,6 +97,7 @@ std::wstring ResolveRecordingPath(const std::wstring& folder,
     std::wstring name = nameTemplate.empty() ? std::wstring(L"{session} {date} {time}")
                                              : nameTemplate;
     ReplaceAll(name, L"{session}",  sessionName);
+    ReplaceAll(name, L"{block}",    blockName);
     ReplaceAll(name, L"{date}",     date);
     ReplaceAll(name, L"{time}",     time);
     ReplaceAll(name, L"{datetime}", date + L" " + time);
@@ -541,6 +543,38 @@ RecordSettings RecordSettingsFor(const Block& b, const std::wstring& sessionName
     return s;
 }
 
+// One input block's own file, from the recorder block that asked for it.
+//
+// Two of the recorder's settings are deliberately not passed on, and for the
+// same reason: separate tracks are worth having because they line up, and both
+// of those settings would cut each file at a different moment.
+//
+//  * the silence gate decides per file, so a track that went quiet would come
+//    out shorter than the ones that did not;
+//  * splitting by size depends on how compressible each track turned out to
+//    be, so the files would break in different places. Splitting by time is
+//    the same number of frames for everyone, so that one is kept.
+RecordSettings TrackSettingsFor(const Block& recorderBlock,
+                                const std::wstring& sessionName,
+                                const std::wstring& blockName)
+{
+    RecordSettings s = RecordSettingsFor(recorderBlock, sessionName);
+    s.blockName = blockName;
+    s.skipSilence = false;
+    if (s.splitMode == 2) s.splitMode = 0;
+
+    // Every track needs a name of its own. A template that does not say which
+    // block the file is of gets told, because otherwise all of them resolve to
+    // the same name and the collision escape hatch numbers them in whatever
+    // order they happened to open.
+    if (s.nameTemplate.find(L"{block}") == std::wstring::npos)
+    {
+        if (s.nameTemplate.empty()) s.nameTemplate = L"{session} {date} {time}";
+        s.nameTemplate += L" - {block}";
+    }
+    return s;
+}
+
 // The gate measures over short blocks rather than per sample, so a single
 // sample either way cannot open or shut it.
 static const int kMeterMs = 20;
@@ -667,7 +701,8 @@ bool RecordSink::Open(std::wstring* err)
         return false;
     }
 
-    std::wstring path = ResolveRecordingPath(s.folder, s.nameTemplate, s.sessionName, s.fmt);
+    std::wstring path = ResolveRecordingPath(s.folder, s.nameTemplate, s.sessionName,
+                                            s.fmt, s.blockName);
 
     std::unique_ptr<Recorder> r = MakeRecorder(s.fmt);
     if (!r || !r->Start(path, m_rate, s.kbps, err)) return false;

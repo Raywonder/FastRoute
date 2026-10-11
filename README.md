@@ -1157,8 +1157,10 @@ cleaned signal from the same session.
   MP3 and AAC by the encoders Windows ships, so those depend on the release.
   A format this machine cannot encode is left out of the list rather than
   offered and then refused. The bitrate applies to the four lossy formats.
-* **File name templates** expand `{session}`, `{date}`, `{time}`, `{datetime}`
-  and `{n}`, and the extension is added automatically. An existing file is
+* **File name templates** expand `{session}`, `{block}`, `{date}`, `{time}`,
+  `{datetime}` and `{n}`, and the extension is added automatically. `{block}`
+  is empty for a recorder's own mixed file, there being no one block it is of;
+  it is the point of the thing for the per-block files below. An existing file is
   never overwritten: `{n}` becomes the next free number, and without it a
   ` (2)` suffix is appended.
 * Leaving the folder blank records into `Music\FastRoute`.
@@ -1179,6 +1181,63 @@ cleaned signal from the same session.
 * A session whose only output is a Recorder still works: with no output block
   to clock the graph, one is opened on the default device purely to drive it,
   playing silence.
+
+### Pausing and resuming
+
+There is no pause button, because the block already is one: **switch the
+Recorder block off and on again**. The engine simply stops handing it audio,
+and the file stays open at the position it had reached - so it is a pause
+rather than a stop and a new file. It works from a hotkey, from whatever you
+are doing at the time, with the high and low tones to say which way it went.
+
+The one thing to know is that a pause is *absent* from the file rather than
+silent in it, so a recording made with pauses is not a timeline. That is the
+same thing **Skip silence** does, for the same reason.
+
+### A file per block
+
+**Recording mode** on a Recorder block offers three answers:
+
+* **The mix, in one file** - what a recorder has always written: everything
+  reaching that point in the list, through every effect above it.
+* **Each input block, in a file of its own** - one file per input block above
+  the recorder, named after the block.
+* **Both** - the mixed file, and the per-block files beside it.
+
+A per-block file is **not a slice of the mix.** It is taken at the input block
+itself: that block's own volume applied, and nothing below the block in the
+list. An effect between the input and the recorder is in the mixed file and not
+in the tracks, which is usually the point - a multitrack recording is worth
+having because each track is still raw enough to work on afterwards - but it
+does mean the tracks do not add up to the mixed file when there are effects
+between them.
+
+They do line up with each other, exactly, and that is enforced rather than
+hoped for:
+
+* a block that is switched off writes **silence** into its track rather than
+  nothing, so every track stays the same length;
+* **Skip silence** is not applied to tracks. It decides per file, so a track
+  that happened to go quiet would come out shorter than the ones that did not;
+* **splitting by megabytes** is not applied to tracks either, because how many
+  megabytes a track has made depends on what was in it. Splitting by *minutes*
+  is the same number of frames for everybody, so that one is passed on.
+
+Tracks are named after their blocks, so **naming the blocks names the files**.
+Two blocks of the same type with no names of their own become `Application` and
+`Application 2`, in list order. If the template does not mention `{block}`,
+` - {block}` is appended to it, because otherwise every track would resolve to
+the same name and be told apart only by the order the files happened to open
+in.
+
+A block added to a running session gets a track from that moment, and one
+removed closes its file - the mixed recording carries on either way, which is
+the reason the per-block files hang off the input blocks rather than off the
+recorder.
+
+With two Recorder blocks both asking for tracks, an input block's file belongs
+to the **first** of them below it. One input cannot be written to two track
+files at once, so the second recorder gets its mixed file and nothing else.
 
 ### Skipping silence
 

@@ -72,6 +72,27 @@ const BlockType* FindBlockType(const std::wstring& id);
 #define BT_OUTPUT_DEVICE L"output.device"
 #define BT_OUT_ASIO     L"output.asio"
 
+// Which input blocks a Recorder has been told to give a file of their own, and
+// what each of those files is called.
+//
+// Entry i is the name for block i's own track, or empty when block i does not
+// get one - which is every block that is not an input, and every input with no
+// recorder below it asking for tracks. Below, because a recorder only ever
+// hears what is above it in the list.
+//
+// Whether that recorder is switched on is deliberately not part of it.
+// Switching a recorder off pauses it: its own file stays open and resumes
+// where it left off, so the tracks beside it have to do the same or they would
+// be a different recording from the one they sit next to.
+//
+// The name is the block's, with a number added when two blocks of the same
+// type are both unnamed: two files called "Application" would otherwise be
+// told apart only by the order they happened to open in.
+//
+// Separate from the engine because it is a decision about a list of blocks and
+// nothing else, so it can be checked without a graph or a sound card.
+std::vector<std::wstring> TrackNamesFor(const std::vector<Block>& blocks);
+
 // Which programs an application block captures, in the order they are listed.
 // The list where it has one and the single name otherwise, so that one answer
 // serves a session saved before a block could name several. Empty for a block
@@ -85,6 +106,18 @@ enum AppSource
     AS_NAMED = 0,        // the process named in the block
     AS_FOREGROUND = 1,   // whatever was in front when the block last started
     AS_FOLLOW = 2,       // whatever is in front, and it keeps up as that changes
+};
+
+// What a Recorder block writes. The mix is the bus where the block sits, which
+// is what a recorder has always written. Tracks are a file per input block
+// feeding it, tapped at that block's own level and before anything further
+// down the list - which is what makes them separable, and also what makes them
+// not the same audio as the mix.
+enum
+{
+    RM_MIXED  = 0,
+    RM_TRACKS = 1,
+    RM_BOTH   = 2,
 };
 
 // Recorder silence gate: hold time meaning "never shut again".
@@ -543,9 +576,11 @@ struct Block
 
     // output.recorder
     std::wstring folder;        // "" == Music\FastRoute
-    std::wstring nameTemplate;  // supports {session} {date} {time} {datetime} {n}
+    std::wstring nameTemplate;  // supports {session} {block} {date} {time}
+                                // {datetime} {n}
     int recFormat = 0;          // 0 wav, 1 flac, 2 mp3
     int bitrateKbps = 192;
+    int recMode = RM_MIXED;     // the mix, a file per input block, or both
 
     // output.recorder: silence gate. Audio quieter than the threshold is not
     // written at all, so the file skips it rather than storing it.
