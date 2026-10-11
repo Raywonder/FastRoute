@@ -525,7 +525,12 @@ RecordSettings RecordSettingsFor(const Block& b, const std::wstring& sessionName
     s.folder = b.folder;
     s.nameTemplate = b.nameTemplate;
     s.sessionName = sessionName;
-    s.fmt = (RecFormat)((b.recFormat >= 0 && b.recFormat <= 2) ? b.recFormat : 0);
+    // Against kRecFormatCount, not against 2. It was 2 when WAV, FLAC and MP3
+    // were the only formats, and it stayed 2 when AAC, Ogg Vorbis and Opus
+    // were added - so choosing one of those three silently recorded a WAV
+    // file, under whatever name the template gave it.
+    s.fmt = (RecFormat)((b.recFormat >= 0 && b.recFormat < kRecFormatCount)
+                            ? b.recFormat : 0);
     s.kbps = b.bitrateKbps;
     s.skipSilence = b.skipSilence;
     s.silenceDb = b.silenceDb;
