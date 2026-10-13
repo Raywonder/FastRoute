@@ -71,6 +71,20 @@ const BlockType* FindBlockType(const std::wstring& id);
 #define BT_OUT_NET      L"output.net"
 #define BT_OUTPUT_DEVICE L"output.device"
 #define BT_OUT_ASIO     L"output.asio"
+#define BT_OUT_STREAM   L"output.stream"
+
+// What kind of server a Stream Out block sends to. Stored in session files, so
+// the numbers are fixed once written.
+enum OutServer
+{
+    OS_RTMP = 0,          // AAA Streamer, MediaMTX, most streaming platforms
+    OS_ICECAST = 1,       // Icecast 2
+    OS_SHOUTCAST1 = 2,    // Shoutcast 1 (password on the next port up)
+    OS_SHOUTCAST2 = 3,    // Shoutcast 2 (stream id, user and password)
+};
+static const int kOutServerCount = 4;
+const wchar_t* OutServerName(int s);     // "RTMP (AAA Streamer and most platforms)"
+const wchar_t* OutFormatName(int f);     // "AAC", "Ogg Opus"
 
 // Which input blocks a Recorder has been told to give a file of their own, and
 // what each of those files is called.
@@ -595,6 +609,30 @@ struct Block
     int  splitMode = 0;         // 0 never, 1 after minutes, 2 after megabytes
     int  splitMinutes = 30;     // 1 to 1440
     int  splitMb = 100;         // 1 to 4000
+
+    // output.stream
+    //
+    // The key is a password in all but name - anyone holding it can stream as
+    // the account it belongs to - so it is never put in a summary, a status
+    // line or the error log, and on disk it is encrypted for the Windows user
+    // who saved it.
+    int  outServer = OS_RTMP;
+    std::wstring outUrl;        // rtmp://host:1935/live, or host:port for the others
+    std::wstring outMount;      // Icecast mount point, "/live"
+    std::wstring outUser;       // Icecast or Shoutcast 2 user; blank is "source"
+    std::wstring outKey;        // stream key (RTMP) or source password
+    int  outSid = 1;            // Shoutcast 2 stream id
+    int  outFormat = 0;         // a StreamFormat; RTMP is always AAC
+    int  outKbps = 192;
+    bool outReconnect = true;
+    // What listeners and directories are told, Icecast and Shoutcast only.
+    std::wstring outName, outDesc, outGenre, outSiteUrl;
+    bool outPublic = false;
+    // The "now playing" title. Changing it while the stream runs sends the new
+    // one to the server without reconnecting, except for Ogg, which restarts.
+    std::wstring outTitle;
+    // The AAA Streamer stream this block was filled in from, for the summary.
+    std::wstring outAaaTitle;
 
     // all blocks
     // A name of the user's own, shown instead of the block type. Two Gain

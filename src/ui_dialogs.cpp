@@ -4,6 +4,12 @@
 #include "audio/netcodec.h"
 #include "audio/asiodev.h"
 #include "plugins/plugins.h"
+#include "audio/aacenc.h"
+#include "audio/icecast.h"
+#include "audio/rtmp.h"
+#include "aaa.h"
+#include <atomic>
+#include <memory>
 #include <thread>
 #include <algorithm>
 #include <cmath>
@@ -3176,6 +3182,578 @@ static INT_PTR CALLBACK AsioDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
     return FALSE;
 }
 
+// ---------------------------------------------------------------------------
+// Stream Out block
+//
+// One dialog for every kind of server. The fields that do not apply to the
+// chosen kind are disabled rather than hidden, so the tab order and the
+// layout stay the same while the server type is being decided - and a screen
+// reader still finds them and says they are unavailable.
+// ---------------------------------------------------------------------------
+
+static const int kSoAacKbps[] = { 96, 128, 160, 192 };
+static const int kSoMp3Kbps[] = { 96, 128, 160, 192, 224, 256, 320 };
+static const int kSoOggKbps[] = { 64, 96, 128, 160, 192, 256, 320 };
+
+static int SoServer(HWND dlg)
+{
+    int s = (int)SendDlgItemMessageW(dlg, IDC_SO_SERVER, CB_GETCURSEL, 0, 0);
+    return (s < 0 || s >= kOutServerCount) ? OS_RTMP : s;
+}
+
+// The formats offered for a server, as StreamFormat values, in combo order.
+static std::vector<int> SoFormatsFor(int server)
+{
+    std::vector<int> f;
+    f.push_back(0);                                  // AAC everywhere
+    if (server != OS_RTMP && MediaFoundationAvailable() && AacEncoder::Mp3Available())
+        f.push_back(1);
+    if (server == OS_ICECAST) { f.push_back(2); f.push_back(3); }
+    return f;
+}
+
+static int SoFormat(HWND dlg)
+{
+    std::vector<int> f = SoFormatsFor(SoServer(dlg));
+    int i = (int)SendDlgItemMessageW(dlg, IDC_SO_FORMAT, CB_GETCURSEL, 0, 0);
+    return (i >= 0 && (size_t)i < f.size()) ? f[(size_t)i] : 0;
+}
+
+static std::vector<int> SoKbpsFor(int format)
+{
+    if (format == 1) return std::vector<int>(std::begin(kSoMp3Kbps), std::end(kSoMp3Kbps));
+    if (format >= 2) return std::vector<int>(std::begin(kSoOggKbps), std::end(kSoOggKbps));
+    return std::vector<int>(std::begin(kSoAacKbps), std::end(kSoAacKbps));
+}
+
+static int SoKbps(HWND dlg)
+{
+    std::vector<int> k = SoKbpsFor(SoFormat(dlg));
+    int i = (int)SendDlgItemMessageW(dlg, IDC_SO_KBPS, CB_GETCURSEL, 0, 0);
+    return (i >= 0 && (size_t)i < k.size()) ? k[(size_t)i] : 192;
+}
+
+static void FillSoKbps(HWND dlg, int want)
+{
+    HWND c = GetDlgItem(dlg, IDC_SO_KBPS);
+    SendMessageW(c, CB_RESETCONTENT, 0, 0);
+    std::vector<int> k = SoKbpsFor(SoFormat(dlg));
+    int sel = 0, bestDiff = 1 << 30;
+    for (size_t i = 0; i < k.size(); ++i)
+    {
+        SendMessageW(c, CB_ADDSTRING, 0, (LPARAM)FormatW(L"%d kbps", k[i]).c_str());
+        int d = k[i] > want ? k[i] - want : want - k[i];
+        if (d < bestDiff) { bestDiff = d; sel = (int)i; }
+    }
+    SendMessageW(c, CB_SETCURSEL, (WPARAM)sel, 0);
+}
+
+static void FillSoFormats(HWND dlg, int want)
+{
+    HWND c = GetDlgItem(dlg, IDC_SO_FORMAT);
+    SendMessageW(c, CB_RESETCONTENT, 0, 0);
+    std::vector<int> f = SoFormatsFor(SoServer(dlg));
+    int sel = 0;
+    for (size_t i = 0; i < f.size(); ++i)
+    {
+        SendMessageW(c, CB_ADDSTRING, 0, (LPARAM)OutFormatName(f[i]));
+        if (f[i] == want) sel = (int)i;
+    }
+    SendMessageW(c, CB_SETCURSEL, (WPARAM)sel, 0);
+}
+
+static void SyncStreamOutFields(HWND dlg)
+{
+    const int server = SoServer(dlg);
+    const bool rtmp = server == OS_RTMP;
+    const bool ice = server == OS_ICECAST;
+    const bool sc2 = server == OS_SHOUTCAST2;
+
+    // The labels say what the field is for this kind of server, since the
+    // same box is a stream key for one and a password for the others.
+    SetDlgItemTextW(dlg, IDC_SO_URL_LABEL,
+                    rtmp ? L"Server &address, such as rtmp://aaastreamer.devinecreations.net:1935/live:"
+                         : L"Server &address and port, such as stream.example.com:8000:");
+    SetDlgItemTextW(dlg, IDC_SO_KEY_LABEL, rtmp ? L"Stream &key:" : L"Source pass&word:");
+    SetDlgItemTextW(dlg, IDC_SO_SHOWKEY, rtmp ? L"S&how the key" : L"S&how the password");
+
+    const int on[][2] = {
+        { IDC_SO_MOUNT, ice }, { IDC_SO_MOUNT_LABEL, ice },
+        { IDC_SO_SID, sc2 }, { IDC_SO_SID_LABEL, sc2 },
+        { IDC_SO_USER, ice || sc2 }, { IDC_SO_USER_LABEL, ice || sc2 },
+        { IDC_SO_NAME, !rtmp }, { IDC_SO_NAME_LABEL, !rtmp },
+        { IDC_SO_DESC, !rtmp }, { IDC_SO_DESC_LABEL, !rtmp },
+        { IDC_SO_GENRE, !rtmp }, { IDC_SO_GENRE_LABEL, !rtmp },
+        { IDC_SO_SITE, !rtmp }, { IDC_SO_SITE_LABEL, !rtmp },
+        { IDC_SO_PUBLIC, !rtmp }, { IDC_SO_TITLE, !rtmp },
+        { IDC_SO_FORMAT, !rtmp },
+    };
+    for (const auto& p : on) EnableWindow(GetDlgItem(dlg, p[0]), p[1] != 0);
+
+    std::wstring note;
+    if (rtmp)
+        note = L"Sent as AAC at 48 kHz stereo, which plays in every browser. Use AAA "
+               L"Streamer... to sign in and pick one of your streams.";
+    else if (ice)
+        note = L"The title is sent to the server whenever you press Apply. Ogg streams "
+               L"carry it inside the stream, so changing it there reconnects.";
+    else
+        note = L"Shoutcast takes AAC or MP3. The source connects to the port after the "
+               L"one given here.";
+    if (!rtmp && !(MediaFoundationAvailable() && AacEncoder::Mp3Available()))
+        note += L" MP3 is not offered: Windows on this machine has no MP3 encoder.";
+    SetDlgItemTextW(dlg, IDC_SO_NOTE, note.c_str());
+}
+
+static std::wstring SoText(HWND dlg, int id)
+{
+    wchar_t buf[2048] = { 0 };
+    GetDlgItemTextW(dlg, id, buf, 2048);
+    return Trim(buf);
+}
+
+// ---- AAA Streamer sign-in and stream picker --------------------------------
+
+static const UINT WM_AAA_STARTED = WM_APP + 21;   // lp: AaaMsg*
+static const UINT WM_AAA_POLLED  = WM_APP + 22;   // lp: AaaMsg*
+static const UINT WM_AAA_LISTED  = WM_APP + 23;   // lp: AaaMsg*
+
+struct AaaMsg
+{
+    bool ok = false;
+    int poll = aaa::PR_ERROR;
+    std::wstring err, who;
+    aaa::DeviceStart start;
+    std::vector<aaa::Stream> streams;
+};
+
+struct AaaCtx
+{
+    std::vector<aaa::Stream> streams;
+    std::shared_ptr<std::atomic<bool>> stop = std::make_shared<std::atomic<bool>>(false);
+    std::wstring authorizeUrl;
+    aaa::Stream chosen;
+};
+
+static void PostOrDrop(HWND dlg, UINT msg, AaaMsg* m)
+{
+    if (!PostMessageW(dlg, msg, 0, reinterpret_cast<LPARAM>(m))) delete m;
+}
+
+static void AaaSay(HWND dlg, const std::wstring& text)
+{
+    SetDlgItemTextW(dlg, IDC_AAA_STATUS, text.c_str());
+    Announce(GetDlgItem(dlg, IDC_AAA_STATUS), text);
+}
+
+static void AaaSync(HWND dlg)
+{
+    const bool in = aaa::SignedIn();
+    EnableWindow(GetDlgItem(dlg, IDC_AAA_SIGNOUT), in);
+    EnableWindow(GetDlgItem(dlg, IDC_AAA_REFRESH), in);
+    const bool any = SendDlgItemMessageW(dlg, IDC_AAA_LIST, LB_GETCOUNT, 0, 0) > 0;
+    EnableWindow(GetDlgItem(dlg, IDOK), any);
+}
+
+static void AaaLoadStreams(HWND dlg)
+{
+    std::thread([dlg] {
+        AaaMsg* m = new AaaMsg();
+        std::wstring err;
+        m->who = aaa::WhoAmI(&err);
+        m->ok = aaa::ListStreams(&m->streams, &m->err);
+        if (!m->ok && m->err.empty()) m->err = err;
+        PostOrDrop(dlg, WM_AAA_LISTED, m);
+    }).detach();
+}
+
+static INT_PTR CALLBACK AaaDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
+{
+    AaaCtx* ctx = reinterpret_cast<AaaCtx*>(GetWindowLongPtrW(dlg, DWLP_USER));
+
+    switch (msg)
+    {
+    case WM_INITDIALOG:
+        ctx = reinterpret_cast<AaaCtx*>(lp);
+        SetWindowLongPtrW(dlg, DWLP_USER, lp);
+        EnableWindow(GetDlgItem(dlg, IDC_AAA_OPEN), FALSE);
+        if (aaa::SignedIn())
+        {
+            SetDlgItemTextW(dlg, IDC_AAA_STATUS, L"Signed in. Getting your streams...");
+            AaaLoadStreams(dlg);
+        }
+        else
+            SetDlgItemTextW(dlg, IDC_AAA_STATUS,
+                L"Not signed in. Press Sign in: FastRoute opens the AAA Streamer page "
+                L"in your browser, where you approve this computer. No password is "
+                L"typed here.");
+        AaaSync(dlg);
+        return TRUE;
+
+    case WM_AAA_STARTED:
+    {
+        std::unique_ptr<AaaMsg> m(reinterpret_cast<AaaMsg*>(lp));
+        EnableWindow(GetDlgItem(dlg, IDC_AAA_SIGNIN), TRUE);
+        if (!m->ok)
+        {
+            AaaSay(dlg, L"Could not start the sign-in. " + m->err);
+            return TRUE;
+        }
+        ctx->authorizeUrl = m->start.authorizeUrl;
+        EnableWindow(GetDlgItem(dlg, IDC_AAA_OPEN), TRUE);
+        ShellExecuteW(dlg, L"open", ctx->authorizeUrl.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+        AaaSay(dlg, FormatW(
+            L"Your browser is opening the AAA Streamer approval page. Approve FastRoute "
+            L"there. If the page asks you to sign in first, sign in, then press Open the "
+            L"sign-in page again. The code is %s. Waiting for approval; this code works "
+            L"for 10 minutes.", m->start.userCode.c_str()));
+
+        // Ask every three seconds until it is approved, refused or expired.
+        const std::wstring token = m->start.pollToken;
+        std::shared_ptr<std::atomic<bool>> stop = ctx->stop;
+        std::thread([dlg, token, stop] {
+            const ULONGLONG until = GetTickCount64() + 10 * 60 * 1000;
+            int failures = 0;
+            while (!*stop && GetTickCount64() < until)
+            {
+                for (int i = 0; i < 30 && !*stop; ++i) Sleep(100);
+                if (*stop) return;
+                std::wstring err;
+                int r = aaa::PollSignIn(token, &err);
+                if (r == aaa::PR_PENDING) continue;
+                if (r == aaa::PR_ERROR && ++failures < 5) continue;   // a blip
+                AaaMsg* m2 = new AaaMsg();
+                m2->poll = r;
+                m2->err = err;
+                PostOrDrop(dlg, WM_AAA_POLLED, m2);
+                return;
+            }
+            if (*stop) return;
+            AaaMsg* m2 = new AaaMsg();
+            m2->poll = aaa::PR_EXPIRED;
+            PostOrDrop(dlg, WM_AAA_POLLED, m2);
+        }).detach();
+        return TRUE;
+    }
+
+    case WM_AAA_POLLED:
+    {
+        std::unique_ptr<AaaMsg> m(reinterpret_cast<AaaMsg*>(lp));
+        switch (m->poll)
+        {
+        case aaa::PR_APPROVED:
+            AaaSay(dlg, L"Signed in. Getting your streams...");
+            AaaLoadStreams(dlg);
+            break;
+        case aaa::PR_DENIED:
+            AaaSay(dlg, L"The sign-in was refused on the AAA Streamer page.");
+            break;
+        case aaa::PR_EXPIRED:
+            AaaSay(dlg, L"The sign-in code ran out before it was approved. Press Sign in "
+                        L"to get a new one.");
+            break;
+        default:
+            AaaSay(dlg, L"The sign-in did not finish. " + m->err);
+        }
+        EnableWindow(GetDlgItem(dlg, IDC_AAA_OPEN), FALSE);
+        AaaSync(dlg);
+        return TRUE;
+    }
+
+    case WM_AAA_LISTED:
+    {
+        std::unique_ptr<AaaMsg> m(reinterpret_cast<AaaMsg*>(lp));
+        HWND list = GetDlgItem(dlg, IDC_AAA_LIST);
+        SendMessageW(list, LB_RESETCONTENT, 0, 0);
+        ctx->streams = m->streams;
+        if (!m->ok)
+        {
+            AaaSay(dlg, L"Could not get your streams. " + m->err);
+            AaaSync(dlg);
+            return TRUE;
+        }
+        for (const aaa::Stream& s : ctx->streams)
+        {
+            std::wstring row = s.title.empty() ? s.id : s.title;
+            if (!s.status.empty()) row += L", " + s.status;
+            SendMessageW(list, LB_ADDSTRING, 0, (LPARAM)row.c_str());
+        }
+        std::wstring who = m->who.empty() ? std::wstring() : L" as " + m->who;
+        if (ctx->streams.empty())
+            AaaSay(dlg, L"Signed in" + who + L". This account has no streams of its own "
+                        L"to send to. Create one on the AAA Streamer dashboard, then press "
+                        L"Refresh.");
+        else
+        {
+            SendMessageW(list, LB_SETCURSEL, 0, 0);
+            AaaSay(dlg, FormatW(L"Signed in%s. %zu stream%s. Choose one and press Use this "
+                                L"stream.", who.c_str(), ctx->streams.size(),
+                                ctx->streams.size() == 1 ? L"" : L"s"));
+            SetFocus(list);
+        }
+        AaaSync(dlg);
+        return TRUE;
+    }
+
+    case WM_COMMAND:
+        switch (LOWORD(wp))
+        {
+        case IDC_AAA_SIGNIN:
+            EnableWindow(GetDlgItem(dlg, IDC_AAA_SIGNIN), FALSE);
+            AaaSay(dlg, L"Asking AAA Streamer for a sign-in code...");
+            std::thread([dlg] {
+                AaaMsg* m = new AaaMsg();
+                m->ok = aaa::StartSignIn(&m->start, &m->err);
+                PostOrDrop(dlg, WM_AAA_STARTED, m);
+            }).detach();
+            return TRUE;
+
+        case IDC_AAA_OPEN:
+            if (!ctx->authorizeUrl.empty())
+                ShellExecuteW(dlg, L"open", ctx->authorizeUrl.c_str(), nullptr, nullptr,
+                              SW_SHOWNORMAL);
+            return TRUE;
+
+        case IDC_AAA_SIGNOUT:
+            aaa::SignOut();
+            SendDlgItemMessageW(dlg, IDC_AAA_LIST, LB_RESETCONTENT, 0, 0);
+            ctx->streams.clear();
+            AaaSay(dlg, L"Signed out. FastRoute has forgotten the AAA Streamer sign-in on "
+                        L"this computer. Blocks already set up keep their stream key.");
+            AaaSync(dlg);
+            return TRUE;
+
+        case IDC_AAA_REFRESH:
+            AaaSay(dlg, L"Getting your streams...");
+            AaaLoadStreams(dlg);
+            return TRUE;
+
+        case IDC_AAA_LIST:
+            if (HIWORD(wp) == LBN_DBLCLK) PostMessageW(dlg, WM_COMMAND, IDOK, 0);
+            return TRUE;
+
+        case IDOK:
+        {
+            int i = (int)SendDlgItemMessageW(dlg, IDC_AAA_LIST, LB_GETCURSEL, 0, 0);
+            if (i < 0 || (size_t)i >= ctx->streams.size()) return TRUE;
+            ctx->chosen = ctx->streams[(size_t)i];
+            *ctx->stop = true;
+            EndDialog(dlg, IDOK);
+            return TRUE;
+        }
+        case IDCANCEL:
+            *ctx->stop = true;
+            EndDialog(dlg, IDCANCEL);
+            return TRUE;
+        }
+        break;
+    }
+    return FALSE;
+}
+
+static INT_PTR CALLBACK StreamOutDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
+{
+    Block* b = reinterpret_cast<Block*>(GetWindowLongPtrW(dlg, DWLP_USER));
+
+    switch (msg)
+    {
+    case WM_INITDIALOG:
+    {
+        ReverseSliderKeys(dlg);
+        b = reinterpret_cast<Block*>(lp);
+        SetWindowLongPtrW(dlg, DWLP_USER, lp);
+
+        for (int s = 0; s < kOutServerCount; ++s)
+            SendDlgItemMessageW(dlg, IDC_SO_SERVER, CB_ADDSTRING, 0, (LPARAM)OutServerName(s));
+        SendDlgItemMessageW(dlg, IDC_SO_SERVER, CB_SETCURSEL,
+                            (WPARAM)(b->outServer >= 0 && b->outServer < kOutServerCount
+                                         ? b->outServer : 0), 0);
+        FillSoFormats(dlg, b->outFormat);
+        FillSoKbps(dlg, b->outKbps);
+
+        SetDlgItemTextW(dlg, IDC_SO_URL, b->outUrl.c_str());
+        SetDlgItemTextW(dlg, IDC_SO_MOUNT, b->outMount.c_str());
+        SetDlgItemTextW(dlg, IDC_SO_USER, b->outUser.c_str());
+        SetDlgItemTextW(dlg, IDC_SO_KEY, b->outKey.c_str());
+        SetDlgItemInt(dlg, IDC_SO_SID, (UINT)(b->outSid > 0 ? b->outSid : 1), FALSE);
+        SetDlgItemTextW(dlg, IDC_SO_NAME, b->outName.c_str());
+        SetDlgItemTextW(dlg, IDC_SO_DESC, b->outDesc.c_str());
+        SetDlgItemTextW(dlg, IDC_SO_GENRE, b->outGenre.c_str());
+        SetDlgItemTextW(dlg, IDC_SO_SITE, b->outSiteUrl.c_str());
+        SetDlgItemTextW(dlg, IDC_SO_TITLE, b->outTitle.c_str());
+        CheckDlgButton(dlg, IDC_SO_PUBLIC, b->outPublic ? BST_CHECKED : BST_UNCHECKED);
+        CheckDlgButton(dlg, IDC_SO_RECONNECT, b->outReconnect ? BST_CHECKED : BST_UNCHECKED);
+        // Remembered so the key can be shown and hidden again.
+        SetPropW(GetDlgItem(dlg, IDC_SO_KEY), L"FR_PWCHAR",
+                 (HANDLE)(INT_PTR)SendDlgItemMessageW(dlg, IDC_SO_KEY, EM_GETPASSWORDCHAR, 0, 0));
+
+        CheckDlgButton(dlg, IDC_BLOCK_ENABLED, b->enabled ? BST_CHECKED : BST_UNCHECKED);
+        SetupVolumeSlider(dlg, b->volumePct);
+        SyncStreamOutFields(dlg);
+        return TRUE;
+    }
+
+    case WM_HSCROLL:
+        OnVolumeScroll(dlg);
+        return TRUE;
+
+    case WM_DESTROY:
+        RemovePropW(GetDlgItem(dlg, IDC_SO_KEY), L"FR_PWCHAR");
+        break;
+
+    case WM_COMMAND:
+        switch (LOWORD(wp))
+        {
+        case IDC_SO_SERVER:
+            if (HIWORD(wp) == CBN_SELCHANGE)
+            {
+                const int fmt = SoFormat(dlg), kbps = SoKbps(dlg);
+                FillSoFormats(dlg, fmt);
+                FillSoKbps(dlg, kbps);
+                SyncStreamOutFields(dlg);
+            }
+            return TRUE;
+
+        case IDC_SO_FORMAT:
+            if (HIWORD(wp) == CBN_SELCHANGE) FillSoKbps(dlg, SoKbps(dlg));
+            return TRUE;
+
+        case IDC_SO_SHOWKEY:
+        {
+            HWND key = GetDlgItem(dlg, IDC_SO_KEY);
+            const bool show = IsDlgButtonChecked(dlg, IDC_SO_SHOWKEY) == BST_CHECKED;
+            WPARAM ch = show ? 0 : (WPARAM)(INT_PTR)GetPropW(key, L"FR_PWCHAR");
+            if (!show && ch == 0) ch = 0x25CF;
+            SendMessageW(key, EM_SETPASSWORDCHAR, ch, 0);
+            InvalidateRect(key, nullptr, TRUE);
+            return TRUE;
+        }
+
+        case IDC_SO_AAA:
+        {
+            AaaCtx ctx;
+            if (DialogBoxParamW(g_inst, MAKEINTRESOURCEW(IDD_AAA_SIGNIN), dlg, AaaDlgProc,
+                                reinterpret_cast<LPARAM>(&ctx)) == IDOK)
+            {
+                SendDlgItemMessageW(dlg, IDC_SO_SERVER, CB_SETCURSEL, OS_RTMP, 0);
+                FillSoFormats(dlg, 0);
+                FillSoKbps(dlg, SoKbps(dlg));
+                SyncStreamOutFields(dlg);
+                SetDlgItemTextW(dlg, IDC_SO_URL, ctx.chosen.rtmpUrl.c_str());
+                SetDlgItemTextW(dlg, IDC_SO_KEY, ctx.chosen.key.c_str());
+                SetPropW(dlg, L"FR_AAA_TITLE", (HANDLE)new std::wstring(ctx.chosen.title));
+                Announce(GetDlgItem(dlg, IDC_SO_NOTE),
+                         L"Filled in for the AAA Streamer stream " + ctx.chosen.title + L".");
+            }
+            return TRUE;
+        }
+
+        case IDC_APPLY:
+        case IDOK:
+        {
+            const int server = SoServer(dlg);
+            std::wstring url = SoText(dlg, IDC_SO_URL);
+            std::wstring key = SoText(dlg, IDC_SO_KEY);
+            std::wstring mount = SoText(dlg, IDC_SO_MOUNT);
+            std::wstring user = SoText(dlg, IDC_SO_USER);
+            if (url.empty())
+            {
+                ErrorBox(dlg, server == OS_RTMP
+                    ? L"Type the server address, such as "
+                      L"rtmp://aaastreamer.devinecreations.net:1935/live, or press AAA "
+                      L"Streamer to sign in and pick a stream."
+                    : L"Type the server's address and port, such as "
+                      L"stream.example.com:8000.");
+                SetFocus(GetDlgItem(dlg, IDC_SO_URL));
+                return TRUE;
+            }
+            // The same checks the block makes when it starts, so a mistake is
+            // found here rather than as a session that will not run.
+            std::wstring why;
+            if (server == OS_RTMP)
+            {
+                rtmp::Target t;
+                if (!rtmp::ParseTarget(url, key, &t, &why))
+                {
+                    ErrorBox(dlg, why);
+                    SetFocus(GetDlgItem(dlg, key.empty() ? IDC_SO_KEY : IDC_SO_URL));
+                    return TRUE;
+                }
+            }
+            else
+            {
+                icecast::Target t;
+                const int kind = server == OS_ICECAST ? icecast::K_ICECAST
+                               : server == OS_SHOUTCAST2 ? icecast::K_SHOUTCAST2
+                                                         : icecast::K_SHOUTCAST1;
+                if (!icecast::ParseAddress(url, mount, kind, &t, &why))
+                {
+                    ErrorBox(dlg, why);
+                    SetFocus(GetDlgItem(dlg, server == OS_ICECAST && mount.empty()
+                                                 ? IDC_SO_MOUNT : IDC_SO_URL));
+                    return TRUE;
+                }
+                if (key.empty())
+                {
+                    ErrorBox(dlg, L"Type the source password for the server.");
+                    SetFocus(GetDlgItem(dlg, IDC_SO_KEY));
+                    return TRUE;
+                }
+            }
+            BOOL got = FALSE;
+            int sid = (int)GetDlgItemInt(dlg, IDC_SO_SID, &got, FALSE);
+            if (server == OS_SHOUTCAST2 && (!got || sid < 1 || sid > 2147483))
+            {
+                ErrorBox(dlg, L"Type the stream ID the server gave this stream, 1 or more.");
+                SetFocus(GetDlgItem(dlg, IDC_SO_SID));
+                return TRUE;
+            }
+
+            // A different server or key is no longer the AAA stream it was
+            // picked as, so the summary stops saying it is.
+            if (std::wstring* t = (std::wstring*)GetPropW(dlg, L"FR_AAA_TITLE"))
+            {
+                b->outAaaTitle = *t;
+                delete t;
+                RemovePropW(dlg, L"FR_AAA_TITLE");
+            }
+            else if (url != b->outUrl || key != b->outKey || server != OS_RTMP)
+                b->outAaaTitle.clear();
+
+            b->outServer = server;
+            b->outUrl = url;
+            b->outKey = key;
+            b->outMount = mount;
+            b->outUser = user;
+            if (got && sid > 0) b->outSid = sid;
+            b->outFormat = server == OS_RTMP ? 0 : SoFormat(dlg);
+            b->outKbps = SoKbps(dlg);
+            b->outName = SoText(dlg, IDC_SO_NAME);
+            b->outDesc = SoText(dlg, IDC_SO_DESC);
+            b->outGenre = SoText(dlg, IDC_SO_GENRE);
+            b->outSiteUrl = SoText(dlg, IDC_SO_SITE);
+            b->outTitle = SoText(dlg, IDC_SO_TITLE);
+            b->outPublic = IsDlgButtonChecked(dlg, IDC_SO_PUBLIC) == BST_CHECKED;
+            b->outReconnect = IsDlgButtonChecked(dlg, IDC_SO_RECONNECT) == BST_CHECKED;
+            b->enabled = IsDlgButtonChecked(dlg, IDC_BLOCK_ENABLED) == BST_CHECKED;
+            b->volumePct = ReadVolumeSlider(dlg);
+            FinishBlockEdit(dlg, LOWORD(wp));
+            return TRUE;
+        }
+        case IDCANCEL:
+            if (std::wstring* t = (std::wstring*)GetPropW(dlg, L"FR_AAA_TITLE"))
+            {
+                delete t;
+                RemovePropW(dlg, L"FR_AAA_TITLE");
+            }
+            EndDialog(dlg, IDCANCEL);
+            return TRUE;
+        }
+        break;
+    }
+    return FALSE;
+}
+
 bool EditBlockParams(HWND parent, Block& b)
 {
     if (b.typeId == BT_INPUT_APP)
@@ -3277,6 +3855,11 @@ bool EditBlockParams(HWND parent, Block& b)
         ctx.block = &b;
         return DialogBoxParamW(g_inst, MAKEINTRESOURCEW(IDD_BLOCK_NETRECV), parent,
                                NetRecvDlgProc, reinterpret_cast<LPARAM>(&ctx)) == IDOK;
+    }
+    if (b.typeId == BT_OUT_STREAM)
+    {
+        return DialogBoxParamW(g_inst, MAKEINTRESOURCEW(IDD_BLOCK_STREAMOUT), parent,
+                               StreamOutDlgProc, reinterpret_cast<LPARAM>(&b)) == IDOK;
     }
     if (b.typeId == BT_OUT_NET)
     {
