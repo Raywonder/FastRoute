@@ -33,7 +33,8 @@ bool SaveToken(const std::wstring& token)
     if (prot.empty()) return false;
     FILE* f = nullptr;
     if (_wfopen_s(&f, TokenPath().c_str(), L"wb") != 0 || !f) return false;
-    std::string ascii(prot.begin(), prot.end());   // base64 is plain ASCII
+    std::string ascii;                             // base64 is plain ASCII
+    for (wchar_t ch : prot) ascii += (char)ch;
     fwrite(ascii.data(), 1, ascii.size(), f);
     fclose(f);
     return true;

@@ -245,7 +245,7 @@ void Announce(HWND ctl, const std::wstring& text)
     if (!GetPropW(ctl, L"FR_LIVE"))
     {
         IAccPropServices* ps = nullptr;
-        if (SUCCEEDED(CoCreateInstance(CLSID_AccPropServices, nullptr, CLSCTX_INPROC_SERVER,
+        if (SUCCEEDED(CoCreateInstance(__uuidof(CAccPropServices), nullptr, CLSCTX_INPROC_SERVER,
                                        IID_PPV_ARGS(&ps))) && ps)
         {
             VARIANT v;
