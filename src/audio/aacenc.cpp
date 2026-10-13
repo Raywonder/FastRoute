@@ -188,6 +188,43 @@ bool AacEncoder::StartCodec(int sampleRate, int kbps, bool mp3, std::wstring* er
             else
                 t->Release();
         }
+        // Some builds offer nothing until an output type is set, which is the
+        // wrong way round for picking one. The transcode list is the same set
+        // of types the Recorder's MP3 picks from, so that is the fallback.
+        if (!best)
+        {
+            IMFCollection* col = nullptr;
+            if (SUCCEEDED(MFTranscodeGetAudioOutputAvailableTypes(MFAudioFormat_MP3,
+                              MFT_ENUM_FLAG_ALL, nullptr, &col)) && col)
+            {
+                DWORD count = 0;
+                col->GetElementCount(&count);
+                for (DWORD i = 0; i < count; ++i)
+                {
+                    IUnknown* u = nullptr;
+                    IMFMediaType* t = nullptr;
+                    if (FAILED(col->GetElement(i, &u)) || !u) continue;
+                    u->QueryInterface(IID_PPV_ARGS(&t));
+                    u->Release();
+                    if (!t) continue;
+                    UINT32 r = 0, c = 0, bps = 0;
+                    t->GetUINT32(MF_MT_AUDIO_SAMPLES_PER_SECOND, &r);
+                    t->GetUINT32(MF_MT_AUDIO_NUM_CHANNELS, &c);
+                    t->GetUINT32(MF_MT_AUDIO_AVG_BYTES_PER_SECOND, &bps);
+                    const UINT32 want = (UINT32)(m_kbps * 125);
+                    const UINT32 d = bps > want ? bps - want : want - bps;
+                    if (r == (UINT32)sampleRate && c == 2 && d < bestDiff)
+                    {
+                        if (best) best->Release();
+                        best = t;
+                        bestDiff = d;
+                    }
+                    else
+                        t->Release();
+                }
+                col->Release();
+            }
+        }
         if (!best)
         {
             in->Release();

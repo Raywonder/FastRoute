@@ -2,7 +2,7 @@
 // server with the same encoders and protocol code as the Stream Out block.
 //
 //   streamout_selftest rtmp URL KEY [seconds] [kbps]
-//   streamout_selftest icecast|shoutcast1|shoutcast2 HOST:PORT MOUNT_OR_SID USER
+//   streamout_selftest icecast|shoutcast1|shoutcast2 HOST:PORT MOUNT_OR_SID USER (- for none)
 //                      FORMAT [seconds] [kbps] [title]
 //
 // FORMAT is aac, mp3, opus or vorbis. The source password is read from the
@@ -112,6 +112,7 @@ static int Source(int argc, wchar_t** argv)
     { fwprintf(stderr, L"target: %s\n", err.c_str()); return 3; }
     if (kind == icecast::K_SHOUTCAST2) t.sid = _wtoi(argv[3]);
     t.user = Narrow(argv[4]);
+    if (t.user == "-") t.user.clear();   // "-" is no user
     const char* pass = getenv("FR_SELFTEST_PASS");
     t.password = pass ? pass : "";
     t.name = "FastRoute self test";

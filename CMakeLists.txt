@@ -121,6 +121,6 @@ if (FASTROUTE_SELFTEST)
     target_compile_definitions(streamout_selftest PRIVATE UNICODE _UNICODE NOMINMAX
                                WIN32_LEAN_AND_MEAN)
     target_link_libraries(streamout_selftest PRIVATE
-        mfplat mfuuid ole32 oleaut32 oleacc uuid shell32 user32 crypt32 ws2_32
+        mfplat mfuuid mf ole32 oleaut32 oleacc uuid shell32 user32 crypt32 ws2_32
         vorbis vorbisenc ogg opus speexdsp)
 endif()
