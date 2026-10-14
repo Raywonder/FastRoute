@@ -1040,6 +1040,10 @@ with it without asking first.
 Off by default. A program that phones home unasked should be asked first, and
 Settings is where to ask.
 
+Updates come from this fork's own releases, the "latest" release of
+https://github.com/Raywonder/FastRoute, never from the original project, so an
+update cannot replace this build with one that lacks its features.
+
 What it compares is the commit where it can and the version where it cannot.
 The commit is exact; the version is the fallback for a build that was made
 without git to ask, and it is compared the way a person reads it, so 0.10 is

@@ -18,7 +18,7 @@
 namespace {
 
 const wchar_t* kHost = L"api.github.com";
-const wchar_t* kPath = L"/repos/masonasons/FastRoute/releases/tags/latest";
+const wchar_t* kPath = L"/repos/Raywonder/FastRoute/releases/tags/latest";
 // GitHub refuses a request without one, so this is not decoration.
 const wchar_t* kAgent = L"FastRoute-Updater";
 
