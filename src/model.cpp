@@ -42,6 +42,7 @@ const std::vector<BlockType>& AllBlockTypes()
         { BT_OUTPUT_DEVICE, L"Output Device",   L"Output Blocks", BlockKind::Output },
         { BT_OUT_RECORDER,  L"Recorder",        L"Output Blocks", BlockKind::Output },
         { BT_OUT_NET,       L"Net Send",        L"Output Blocks", BlockKind::Output },
+        { BT_OUT_STREAM,    L"Stream Out",      L"Output Blocks", BlockKind::Output },
         { BT_OUT_ASIO,      L"ASIO Output",     L"Output Blocks", BlockKind::Output },
     };
     return types;
@@ -121,6 +122,28 @@ const wchar_t* UpdateCheckName(int c)
     case UC_HOURLY:  return L"when it starts, and every hour";
     case UC_DAILY:   return L"when it starts, and every day";
     default:         return L"never";
+    }
+}
+
+const wchar_t* OutServerName(int s)
+{
+    switch (s)
+    {
+    case OS_ICECAST:    return L"Icecast 2";
+    case OS_SHOUTCAST1: return L"Shoutcast 1";
+    case OS_SHOUTCAST2: return L"Shoutcast 2";
+    default:            return L"RTMP (AAA Streamer and most streaming platforms)";
+    }
+}
+
+const wchar_t* OutFormatName(int f)
+{
+    switch (f)
+    {
+    case 1:  return L"MP3";
+    case 2:  return L"Ogg Opus";
+    case 3:  return L"Ogg Vorbis";
+    default: return L"AAC";
     }
 }
 
@@ -344,6 +367,7 @@ bool Block::IsConfigured() const
     if (typeId == BT_INPUT_APP)
         return appSource != AS_NAMED || !AppTargets(*this).empty();
     if (typeId == BT_INPUT_STREAM) return !url.empty();
+    if (typeId == BT_OUT_STREAM)   return !outUrl.empty();
     if (typeId == BT_OUT_RECORDER) return true;   // blank folder means the Music folder
     if (typeId == BT_INPUT_DEVICE || typeId == BT_OUTPUT_DEVICE ||
         typeId == BT_INPUT_SYSTEM) return true;   // "" == default device
@@ -509,6 +533,22 @@ std::wstring Block::ParamSummary() const
             return L"no sender chosen yet; press Enter to pick one";
         return FormatW(L"%s over %s, %d ms buffer", who.c_str(),
                        NetProtocolName(netProtocol), netBufferMs);
+    }
+    if (typeId == BT_OUT_STREAM)
+    {
+        // Never the key: this line is shown in the list and read out.
+        if (outUrl.empty()) return L"no server set yet; press Enter to set one";
+        std::wstring where = outUrl;
+        if (outServer == OS_ICECAST && !outMount.empty()) where += outMount;
+        if (outServer == OS_SHOUTCAST2) where += FormatW(L" stream %d", outSid);
+        std::wstring what = !outAaaTitle.empty() ? FormatW(L"AAA Streamer \"%s\", ",
+                                                           outAaaTitle.c_str())
+                                                 : std::wstring();
+        const int fmt = outServer == OS_RTMP ? 0 : outFormat;
+        return FormatW(L"%s%s to %s, %s %d kbps%s, volume %d%%", what.c_str(),
+                       outServer == OS_RTMP ? L"RTMP" : OutServerName(outServer),
+                       where.c_str(), OutFormatName(fmt), outKbps,
+                       outReconnect ? L"" : L", no reconnect", volumePct);
     }
     if (typeId == BT_OUT_NET)
     {
@@ -1127,6 +1167,30 @@ void SessionStore::Load()
                 b.netOpusRateMode   = jb.AsInt(L"netOpusRateMode", NOR_VBR);
                 b.netOpusDtx        = jb.AsBool(L"netOpusDtx", false);
                 b.netTtl        = jb.AsInt(L"netTtl", 1);
+                if (b.typeId == BT_OUT_STREAM)
+                {
+                    b.outServer    = jb.AsInt(L"outServer", OS_RTMP);
+                    if (b.outServer < 0 || b.outServer >= kOutServerCount) b.outServer = OS_RTMP;
+                    b.outUrl       = jb.AsString(L"outUrl");
+                    b.outMount     = jb.AsString(L"outMount");
+                    b.outUser      = jb.AsString(L"outUser");
+                    // Encrypted for the Windows user who saved it. On another
+                    // machine or account it cannot be read, and the block
+                    // asks for it again rather than streaming with nothing.
+                    b.outKey       = UnprotectText(jb.AsString(L"outKeyProtected"));
+                    b.outSid       = jb.AsInt(L"outSid", 1);
+                    b.outFormat    = jb.AsInt(L"outFormat", 0);
+                    if (b.outFormat < 0 || b.outFormat > 3) b.outFormat = 0;
+                    b.outKbps      = jb.AsInt(L"outKbps", 192);
+                    b.outReconnect = jb.AsBool(L"outReconnect", true);
+                    b.outName      = jb.AsString(L"outName");
+                    b.outDesc      = jb.AsString(L"outDesc");
+                    b.outGenre     = jb.AsString(L"outGenre");
+                    b.outSiteUrl   = jb.AsString(L"outSiteUrl");
+                    b.outPublic    = jb.AsBool(L"outPublic", false);
+                    b.outTitle     = jb.AsString(L"outTitle");
+                    b.outAaaTitle  = jb.AsString(L"outAaaTitle");
+                }
                 b.netBufferMs   = jb.AsInt(L"netBufferMs", 60);
                 // AsNumberAt rather than AsInt: a stream id is a full 32 bit
                 // hash, and one above two billion read as an int comes back
@@ -1391,6 +1455,26 @@ bool SessionStore::Save(std::wstring* err) const
                 jb.Set(L"netOpusRateMode", Json::Num(b.netOpusRateMode));
                 jb.Set(L"netOpusDtx", Json::Bool(b.netOpusDtx));
                 jb.Set(L"netTtl", Json::Num(b.netTtl));
+            }
+            if (b.typeId == BT_OUT_STREAM)
+            {
+                jb.Set(L"outServer", Json::Num(b.outServer));
+                jb.Set(L"outUrl", Json::Str(b.outUrl));
+                jb.Set(L"outMount", Json::Str(b.outMount));
+                jb.Set(L"outUser", Json::Str(b.outUser));
+                if (!b.outKey.empty())
+                    jb.Set(L"outKeyProtected", Json::Str(ProtectText(b.outKey)));
+                jb.Set(L"outSid", Json::Num(b.outSid));
+                jb.Set(L"outFormat", Json::Num(b.outFormat));
+                jb.Set(L"outKbps", Json::Num(b.outKbps));
+                jb.Set(L"outReconnect", Json::Bool(b.outReconnect));
+                jb.Set(L"outName", Json::Str(b.outName));
+                jb.Set(L"outDesc", Json::Str(b.outDesc));
+                jb.Set(L"outGenre", Json::Str(b.outGenre));
+                jb.Set(L"outSiteUrl", Json::Str(b.outSiteUrl));
+                jb.Set(L"outPublic", Json::Bool(b.outPublic));
+                jb.Set(L"outTitle", Json::Str(b.outTitle));
+                if (!b.outAaaTitle.empty()) jb.Set(L"outAaaTitle", Json::Str(b.outAaaTitle));
             }
             if (b.typeId == BT_INPUT_DEVICE || b.typeId == BT_OUTPUT_DEVICE ||
                 b.typeId == BT_INPUT_SYSTEM || b.typeId == BT_INPUT_ASIO ||

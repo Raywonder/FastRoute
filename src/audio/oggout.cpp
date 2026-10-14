@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <functional>
 #include <vector>
 
 extern "C" {
@@ -59,10 +60,18 @@ public:
 
     std::wstring Path() const override { return m_path; }
 
+    // Stream Out uses the same encoders with the pages handed to it rather
+    // than written to a file. Set before Start, with an empty path.
+    std::function<void(const unsigned char*, size_t)> m_sink;
+    // A TITLE comment in the stream's tags, which is the only place an Ogg
+    // stream has for one. Empty means none.
+    std::string m_title;
+
 protected:
     bool OpenFile(const std::wstring& path, std::wstring* err)
     {
         m_path = path;
+        if (m_sink && path.empty()) return true;
         if (_wfopen_s(&m_f, path.c_str(), L"wb") != 0 || !m_f)
         {
             if (err) *err = L"Could not create " + path;
@@ -92,6 +101,13 @@ protected:
 
     void WritePage(const ogg_page& og)
     {
+        if (m_sink)
+        {
+            std::vector<unsigned char> page(og.header, og.header + og.header_len);
+            page.insert(page.end(), og.body, og.body + og.body_len);
+            m_sink(page.data(), page.size());
+            return;
+        }
         if (!m_f) return;
         fwrite(og.header, 1, (size_t)og.header_len, m_f);
         fwrite(og.body, 1, (size_t)og.body_len, m_f);
@@ -140,6 +156,7 @@ public:
 
         vorbis_comment_init(&m_vc);
         vorbis_comment_add_tag(&m_vc, "ENCODER", "FastRoute");
+        if (!m_title.empty()) vorbis_comment_add_tag(&m_vc, "TITLE", m_title.c_str());
         vorbis_analysis_init(&m_vd, &m_vi);
         vorbis_block_init(&m_vd, &m_vb);
         m_dspUp = true;
@@ -362,7 +379,15 @@ private:
         const char* vendor = "FastRoute";
         Put32(tags, (unsigned)strlen(vendor));
         Put(tags, vendor, strlen(vendor));
-        Put32(tags, 0);                          // no comments
+        if (m_title.empty())
+            Put32(tags, 0);                      // no comments
+        else
+        {
+            const std::string c = "TITLE=" + m_title;
+            Put32(tags, 1);
+            Put32(tags, (unsigned)c.size());
+            Put(tags, c.data(), c.size());
+        }
 
         ogg_packet op{};
         op.packet = head.data();
@@ -435,4 +460,14 @@ std::unique_ptr<Recorder> MakeVorbisRecorder()
 std::unique_ptr<Recorder> MakeOpusRecorder()
 {
     return std::unique_ptr<Recorder>(new OpusRecorder());
+}
+
+std::unique_ptr<Recorder> MakeOggStreamEncoder(bool opus, const std::string& title,
+                                               std::function<void(const unsigned char*, size_t)> sink)
+{
+    OggWriterBase* w = opus ? static_cast<OggWriterBase*>(new OpusRecorder())
+                            : static_cast<OggWriterBase*>(new VorbisRecorder());
+    w->m_sink = std::move(sink);
+    w->m_title = title;
+    return std::unique_ptr<Recorder>(w);
 }

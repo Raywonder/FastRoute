@@ -64,6 +64,12 @@ add_executable(FastRoute WIN32
     src/audio/netrecv.cpp
     src/audio/recorder.cpp
     src/audio/oggout.cpp
+    src/audio/rtmp.cpp
+    src/audio/aacenc.cpp
+    src/audio/icecast.cpp
+    src/audio/streamenc.cpp
+    src/audio/streamout.cpp
+    src/aaa.cpp
     src/fastroute.rc
 )
 
@@ -82,7 +88,7 @@ target_link_libraries(FastRoute PRIVATE
     rnnoise speexdsp signalsmith_stretch FLAC asiosdk
     clap_headers vst3_pluginterfaces
     vorbis vorbisfile vorbisenc ogg opus opusfile
-    winhttp ws2_32 iphlpapi)
+    winhttp ws2_32 iphlpapi crypt32)
 
 if (MSVC)
     target_compile_options(FastRoute PRIVATE /W3 /permissive-)
@@ -96,4 +102,25 @@ if (MSVC)
         /DELAYLOAD:mf.dll
         # Windows 7.
         /SUBSYSTEM:WINDOWS,6.01)
+endif()
+
+# A command line check of Stream Out's encoders and protocols, not shipped:
+# publishes a few seconds of a stereo tone to a real server. Off by default so
+# the release build is unchanged; configure with -DFASTROUTE_SELFTEST=ON.
+option(FASTROUTE_SELFTEST "Build the Stream Out self test" OFF)
+if (FASTROUTE_SELFTEST)
+    add_executable(streamout_selftest
+        tools/streamout_selftest.cpp
+        src/util.cpp
+        src/audio/rtmp.cpp
+        src/audio/aacenc.cpp
+        src/audio/icecast.cpp
+        src/audio/streamenc.cpp
+        src/audio/oggout.cpp)
+    target_include_directories(streamout_selftest PRIVATE src)
+    target_compile_definitions(streamout_selftest PRIVATE UNICODE _UNICODE NOMINMAX
+                               WIN32_LEAN_AND_MEAN)
+    target_link_libraries(streamout_selftest PRIVATE
+        mfplat mfuuid mf ole32 oleaut32 oleacc uuid shell32 user32 crypt32 ws2_32
+        vorbis vorbisenc ogg opus speexdsp)
 endif()

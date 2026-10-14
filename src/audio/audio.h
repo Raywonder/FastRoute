@@ -365,9 +365,18 @@ public:
     virtual void Stop() = 0;
     // One line for the session window: where it is going, and how much of it.
     virtual std::wstring StatusText() = 0;
+    // A count that goes up each time the sink has something worth saying out
+    // loud - connected, lost the connection - and what that is. A count rather
+    // than a queue, so that any number of windows can ask without one of them
+    // taking the news away from the rest. Zero for a sink with nothing to say.
+    virtual unsigned EventSerial(std::wstring* text) { (void)text; return 0; }
 };
 
 std::unique_ptr<NetSink> MakeNetSink();
+
+// Stream Out: the bus, as AAC over RTMP, to a live streaming server such as
+// AAA Streamer. Lives in streamout.cpp.
+std::unique_ptr<NetSink> MakeStreamOutSink();
 
 // Whether Media Foundation is on this machine at all. It is delay loaded, so
 // nothing may touch it until this says so.
@@ -566,6 +575,11 @@ public:
 std::unique_ptr<Recorder> MakeRecorder(RecFormat fmt);
 std::unique_ptr<Recorder> MakeVorbisRecorder();
 std::unique_ptr<Recorder> MakeOpusRecorder();
+// The same two encoders for Stream Out: Start with an empty path, and every
+// Ogg page is handed to `sink` (on the encoder's own thread) instead of being
+// written to a file. The title, UTF-8, goes in the stream's tags.
+std::unique_ptr<Recorder> MakeOggStreamEncoder(bool opus, const std::string& title,
+                                               std::function<void(const unsigned char*, size_t)> sink);
 // True when Windows can actually encode this format here. Windows 10 ships a
 // FLAC encoder MFT and an MP3 one; older releases ship neither, so the format
 // is dropped from the recorder block rather than failing when you press run.
@@ -747,6 +761,10 @@ public:
         // A line per block that has something to say beyond its parameters,
         // already named. The buffer uses it to say how far back it is.
         std::vector<std::wstring> blockStatus;
+        // The sum of every sink's EventSerial, and the latest thing one of
+        // them said. A window that remembers the sum knows when to speak.
+        unsigned eventSerial = 0;
+        std::wstring eventText;
     };
     void GetStatus(Status* st);
 

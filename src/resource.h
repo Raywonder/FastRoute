@@ -36,6 +36,8 @@
 #define IDD_BLOCK_NETSEND        129
 #define IDD_BLOCK_ASIO           131
 #define IDD_NET_OPUS             130
+#define IDD_BLOCK_STREAMOUT      132
+#define IDD_AAA_SIGNIN           133
 
 // Menus
 #define IDR_MAIN_MENU            200
@@ -350,6 +352,41 @@
 #define IDC_APP_WAIT            1333
 #define IDC_REC_MODE            1334
 #define IDC_REC_MODE_NOTE       1335
+// Stream Out block
+#define IDC_SO_SERVER           1400
+#define IDC_SO_URL              1401
+#define IDC_SO_URL_LABEL        1402
+#define IDC_SO_MOUNT            1403
+#define IDC_SO_MOUNT_LABEL      1404
+#define IDC_SO_USER             1405
+#define IDC_SO_USER_LABEL       1406
+#define IDC_SO_KEY              1407
+#define IDC_SO_KEY_LABEL        1408
+#define IDC_SO_SHOWKEY          1409
+#define IDC_SO_SID              1410
+#define IDC_SO_SID_LABEL        1411
+#define IDC_SO_FORMAT           1412
+#define IDC_SO_KBPS             1414
+#define IDC_SO_NAME             1415
+#define IDC_SO_DESC             1416
+#define IDC_SO_GENRE            1417
+#define IDC_SO_SITE             1418
+#define IDC_SO_PUBLIC           1419
+#define IDC_SO_TITLE            1420
+#define IDC_SO_RECONNECT        1421
+#define IDC_SO_AAA              1422
+#define IDC_SO_NOTE             1423
+#define IDC_SO_NAME_LABEL       1424
+#define IDC_SO_DESC_LABEL       1425
+#define IDC_SO_GENRE_LABEL      1426
+#define IDC_SO_SITE_LABEL       1427
+// AAA Streamer sign-in
+#define IDC_AAA_STATUS          1430
+#define IDC_AAA_SIGNIN          1431
+#define IDC_AAA_SIGNOUT         1432
+#define IDC_AAA_LIST            1433
+#define IDC_AAA_REFRESH         1434
+#define IDC_AAA_OPEN            1435
 
 // Ten band EQ: one slider and one readout per band, contiguous so the band
 // index is just the control id minus the base.

@@ -814,6 +814,28 @@ static INT_PTR CALLBACK SessionDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
             SetDlgItemTextW(dlg, IDC_SESSION_STATE,
                             SessionStateLine(SessionIdOf(dlg)).c_str());
 
+        // A Stream Out block that has connected, dropped or given up says so
+        // out loud, once, whatever has focus: there is otherwise no way to
+        // know a stream went down without going and reading the times field.
+        {
+            Engine::Status st;
+            const int sid = SessionIdOf(dlg);
+            unsigned serial = 0;
+            std::wstring said;
+            if (SessionRunning(sid) && SessionStatus(sid, &st))
+            {
+                serial = st.eventSerial;
+                said = st.eventText;
+            }
+            const unsigned seen = (unsigned)(UINT_PTR)GetPropW(dlg, L"FR_EVENTS");
+            if (serial != seen)
+            {
+                SetPropW(dlg, L"FR_EVENTS", (HANDLE)(UINT_PTR)serial);
+                if (serial > seen && !said.empty())
+                    Announce(GetDlgItem(dlg, IDC_SESSION_STATE), said);
+            }
+        }
+
         // The times always refresh: a clock that stopped because a one off
         // message is on screen would be worse than useless. Only written when
         // it has actually changed, so nothing is announced twice a second for
@@ -832,6 +854,7 @@ static INT_PTR CALLBACK SessionDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
         return TRUE;
 
     case WM_DESTROY:
+        RemovePropW(dlg, L"FR_EVENTS");
     {
         KillTimer(dlg, 1);
         int id = SessionIdOf(dlg);

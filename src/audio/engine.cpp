@@ -93,6 +93,23 @@ std::wstring Engine::KeyFor(const Block& b)
                        b.netOpusLossPct, b.netOpusComplexity, b.netOpusSignal,
                        b.netOpusRateMode, b.netOpusDtx ? 1 : 0);
     }
+    if (b.typeId == BT_OUT_STREAM)
+    {
+        // Where it goes, how it is encoded and what it says about itself are
+        // all built into the connection, so any of them changing means a new
+        // one. The key is in here because a different key is a different
+        // stream; this string is only ever compared, never shown or logged.
+        // The title is in it only for Ogg, which carries it inside the stream;
+        // the other formats are given a new title without reconnecting.
+        const bool ogg = b.outServer != OS_RTMP && (b.outFormat == 2 || b.outFormat == 3);
+        return FormatW(L"streamout|%d|%s|%s|%s|%s|%d|%d|%d|%d|%s|%s|%s|%s|%d|%s|%s",
+                       b.outServer, b.outUrl.c_str(), b.outMount.c_str(),
+                       b.outUser.c_str(), b.outKey.c_str(), b.outSid, b.outFormat,
+                       b.outKbps, b.outReconnect ? 1 : 0, b.outName.c_str(),
+                       b.outDesc.c_str(), b.outGenre.c_str(), b.outSiteUrl.c_str(),
+                       b.outPublic ? 1 : 0, ogg ? b.outTitle.c_str() : L"",
+                       b.label.c_str());
+    }
     if (b.typeId == BT_OUT_RECORDER)
     {
         // Anything that changes where the audio lands has to start a new file,
@@ -336,6 +353,11 @@ bool Engine::ApplySession(const Session& s, std::wstring* err, bool* graphIntact
         else if (b.typeId == BT_OUT_NET)
         {
             n->net = MakeNetSink();
+            if (!n->net->Start(b, m_rate, err)) return false;
+        }
+        else if (b.typeId == BT_OUT_STREAM)
+        {
+            n->net = MakeStreamOutSink();
             if (!n->net->Start(b, m_rate, err)) return false;
         }
         else if (b.typeId == BT_OUTPUT_DEVICE)
@@ -626,6 +648,13 @@ void Engine::GetStatus(Status* st)
         {
             std::wstring line = n->net->StatusText();
             if (!line.empty()) st->blockStatus.push_back(line);
+            std::wstring said;
+            const unsigned serial = n->net->EventSerial(&said);
+            if (serial)
+            {
+                st->eventSerial += serial;
+                if (!said.empty()) st->eventText = said;
+            }
         }
         if (n->capture && st->following.empty()) st->following = n->capture->TargetName();
         // With several recordings going, the one that has written most is the
