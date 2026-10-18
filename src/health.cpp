@@ -120,7 +120,8 @@ std::wstring Today()
 {
     SYSTEMTIME t{};
     GetSystemTime(&t);
-    return FormatW(L"%04u-%02u-%02u", t.wYear, t.wMonth, t.wDay);
+    return FormatW(L"%04u-%02u-%02u", (unsigned)t.wYear, (unsigned)t.wMonth,
+                   (unsigned)t.wDay);
 }
 
 std::wstring Clip(const std::wstring& s, size_t n)
@@ -191,6 +192,19 @@ std::wstring StatePath(const std::wstring& dir)
     return dir + L"\\app_health.json";
 }
 
+// The same folder AppDataDir names, worked out rather than asked for, because
+// AppDataDir creates it. Looking to see whether a file is there must not be
+// what leaves one behind: FastRoute is portable, and a copy whose own folder
+// is writable never uses this place at all.
+std::wstring RoamingDirIfThere()
+{
+    wchar_t base[MAX_PATH] = {};
+    const DWORD n = GetEnvironmentVariableW(L"APPDATA", base, MAX_PATH);
+    if (n == 0 || n >= MAX_PATH) return std::wstring();
+    const std::wstring dir = std::wstring(base) + L"\\FastRoute";
+    return DirectoryExists(dir) ? dir : std::wstring();
+}
+
 bool WriteText(const std::wstring& path, const std::wstring& text)
 {
     const std::wstring tmp = path + L".tmp";
@@ -251,9 +265,10 @@ void Load(Shared& s)
     if (s.loaded) return;
     s.loaded = true;
 
-    // Beside the program first, then the per-user folder a read-only copy
-    // would have fallen back to.
-    const std::wstring places[2] = { ConfigDir(), AppDataDir() };
+    // Beside the program first, then the per-user folder a copy in a place it
+    // may not write to would have fallen back to - and that one only if it is
+    // already there, so that looking is not what creates it.
+    const std::wstring places[2] = { ConfigDir(), RoamingDirIfThere() };
     for (const std::wstring& dir : places)
     {
         if (dir.empty()) continue;
