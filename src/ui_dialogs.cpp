@@ -1,6 +1,7 @@
 #include "app.h"
 #include "audio/net.h"
 #include "updater.h"
+#include "health.h"
 #include "audio/netcodec.h"
 #include "audio/asiodev.h"
 #include "plugins/plugins.h"
@@ -4283,6 +4284,11 @@ static INT_PTR CALLBACK SettingsDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp
             // Nothing to be quiet about when it is never going to look.
             EnableWindow(GetDlgItem(dlg, IDC_SET_UPDATE_SILENT), when != UC_NEVER);
         }
+        // Not tied to the interval above it: a copy that never looks for an
+        // update can still have been updated by hand, and whether that worked
+        // is exactly what we want to hear about.
+        CheckDlgButton(dlg, IDC_SET_SEND_HEALTH,
+                       g_store.settings.sendHealth ? BST_CHECKED : BST_UNCHECKED);
 
         // An empty list is not helpful when the answer is the same two folders
         // on almost every machine, so those are offered to begin with.
@@ -4430,6 +4436,8 @@ static INT_PTR CALLBACK SettingsDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp
                 if (when >= 0) g_store.settings.updateCheck = when;
                 g_store.settings.updateSilent =
                     IsDlgButtonChecked(dlg, IDC_SET_UPDATE_SILENT) == BST_CHECKED;
+                g_store.settings.sendHealth =
+                    IsDlgButtonChecked(dlg, IDC_SET_SEND_HEALTH) == BST_CHECKED;
             }
             g_store.settings.showHide = want;
             g_store.settings.pluginPaths = ReadPluginPaths(dlg);
@@ -4449,6 +4457,9 @@ static INT_PTR CALLBACK SettingsDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp
 
             std::wstring saveErr;
             if (!g_store.Save(&saveErr)) ErrorBox(dlg, saveErr);
+            // Takes effect now rather than at the next start: turning it off
+            // also throws away anything that was waiting to be sent.
+            Health::SetEnabled(g_store.settings.sendHealth);
             EndDialog(dlg, IDOK);
             return TRUE;
         }

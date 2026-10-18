@@ -41,6 +41,7 @@ add_executable(FastRoute WIN32
     src/tray.cpp
     src/scheduler.cpp
     src/updater.cpp
+    src/health.cpp
     src/audio/devices.cpp
     src/audio/asiodev.cpp
     src/audio/asioio.cpp

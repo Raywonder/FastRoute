@@ -1125,7 +1125,7 @@ END
 /////////////////////////////////////////////////////////////////////////////
 // Settings
 
-IDD_SETTINGS DIALOGEX 0, 0, 280, 356
+IDD_SETTINGS DIALOGEX 0, 0, 280, 374
 STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "FastRoute Settings"
 FONT 9, "Segoe UI", 400, 0, 0x1
@@ -1165,8 +1165,11 @@ BEGIN
     CONTROL         "Install it &quietly, without asking first",
                     IDC_SET_UPDATE_SILENT, "Button",
                     BS_AUTOCHECKBOX | WS_TABSTOP, 7, 314, 266, 12
-    DEFPUSHBUTTON   "OK",     IDOK,     166, 334, 50, 16
-    PUSHBUTTON      "Cancel", IDCANCEL, 223, 334, 50, 16
+    CONTROL         "Send update resul&ts and error reports (no personal content)",
+                    IDC_SET_SEND_HEALTH, "Button",
+                    BS_AUTOCHECKBOX | WS_TABSTOP, 7, 332, 266, 12
+    DEFPUSHBUTTON   "OK",     IDOK,     166, 352, 50, 16
+    PUSHBUTTON      "Cancel", IDCANCEL, 223, 352, 50, 16
 END
 
 /////////////////////////////////////////////////////////////////////////////

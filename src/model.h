@@ -729,6 +729,15 @@ struct AppSettings
     // be a poor surprise.
     bool updateSilent = false;
 
+    // Whether FastRoute tells our server what became of an update - installed,
+    // failed, or did not reopen afterwards - and which build and feed this
+    // copy is on. On by default, because a broken update that nobody tells us
+    // about is one we go on shipping; off is one checkbox away. A report holds
+    // a random install number, the version, the Windows version and a short
+    // description of the fault, and never a file name, a session, a stream
+    // key or anything else of the person's.
+    bool sendHealth = true;
+
     // Which groups in the blocks library are shut. The collapsed ones rather
     // than the expanded ones, so that an empty list means everything open,
     // which is how it behaved before this was remembered at all - and so that

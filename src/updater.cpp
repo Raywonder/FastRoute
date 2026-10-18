@@ -2,6 +2,7 @@
 #include "version.h"
 #include "json.h"
 #include "util.h"
+#include "health.h"
 
 #include <winhttp.h>
 #include <shellapi.h>
@@ -18,6 +19,7 @@
 namespace {
 
 const wchar_t* kHost = L"api.github.com";
+const wchar_t* kRepo = L"Raywonder/FastRoute";
 const wchar_t* kPath = L"/repos/Raywonder/FastRoute/releases/tags/latest";
 // GitHub refuses a request without one, so this is not decoration.
 const wchar_t* kAgent = L"FastRoute-Updater";
@@ -41,6 +43,21 @@ std::wstring ExeName()
     return (slash == std::wstring::npos) ? s : s.substr(slash + 1);
 }
 
+// Which of app-health's classes a refused request belongs to. The distinction
+// matters: a problem at the user's end - offline, a captive portal, a proxy
+// that wants a password - is counted and never alerted on, while one at ours
+// is something we have to go and fix.
+const wchar_t* ClassifyStatus(DWORD status)
+{
+    switch (status)
+    {
+    // A portal or a proxy standing in the way. None of these can come from
+    // GitHub's release API, which is asked for without any credentials.
+    case 401: case 407: case 511: return L"network";
+    default: return L"server";
+    }
+}
+
 // --- a blocking HTTPS GET --------------------------------------------------
 //
 // Small and on its own rather than borrowing the stream block's HttpSource:
@@ -58,13 +75,17 @@ struct Http
     }
 
     bool Open(const std::wstring& host, const std::wstring& path,
-              bool json, std::wstring* err)
+              bool json, UpdateFault* fault)
     {
+        UpdateFault scratch;
+        UpdateFault& f = fault ? *fault : scratch;
+
         session = WinHttpOpen(kAgent, WINHTTP_ACCESS_TYPE_DEFAULT_PROXY,
                               WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
         if (!session)
         {
-            if (err) *err = L"Could not start a network session.";
+            f.message = L"Could not start a network session.";
+            f.cls = L"app";
             return false;
         }
         // Long enough for a slow link, short enough that a dead one does not
@@ -74,7 +95,9 @@ struct Http
         conn = WinHttpConnect(session, host.c_str(), INTERNET_DEFAULT_HTTPS_PORT, 0);
         if (!conn)
         {
-            if (err) *err = FormatW(L"Could not reach %s.", host.c_str());
+            f.message = FormatW(L"Could not reach %s.", host.c_str());
+            // Nothing resolved or nothing answered: the machine's end of it.
+            f.cls = L"network";
             return false;
         }
 
@@ -83,7 +106,8 @@ struct Http
                                  WINHTTP_FLAG_SECURE);
         if (!req)
         {
-            if (err) *err = L"Could not form the request.";
+            f.message = L"Could not form the request.";
+            f.cls = L"app";
             return false;
         }
         if (json)
@@ -94,7 +118,10 @@ struct Http
                                 WINHTTP_NO_REQUEST_DATA, 0, 0, 0) ||
             !WinHttpReceiveResponse(req, nullptr))
         {
-            if (err) *err = FormatW(L"%s did not answer.", host.c_str());
+            f.message = FormatW(L"%s did not answer.", host.c_str());
+            // A timeout, a dropped connection, a certificate a proxy signed
+            // itself: all of them the user's side of the wire.
+            f.cls = L"network";
             return false;
         }
 
@@ -104,9 +131,11 @@ struct Http
                             WINHTTP_NO_HEADER_INDEX);
         if (status != 200)
         {
-            if (err) *err = (status == 404)
+            f.message = (status == 404)
                 ? std::wstring(L"There is no build published yet.")
                 : FormatW(L"The server answered %u.", status);
+            f.cls = ClassifyStatus(status);
+            f.notPublished = (status == 404);
             return false;
         }
         return true;
@@ -174,6 +203,9 @@ int CompareVersions(const std::wstring& a, const std::wstring& b)
     }
 }
 
+const wchar_t* UpdateFeedHost() { return kHost; }
+const wchar_t* UpdateFeedRepo() { return kRepo; }
+
 std::wstring RunningVersion() { return FASTROUTE_VERSION_W; }
 
 std::wstring RunningCommit()
@@ -190,7 +222,7 @@ UpdateInfo CheckForUpdates()
     UpdateInfo info;
 
     Http http;
-    if (!http.Open(kHost, kPath, true, &info.error)) return info;
+    if (!http.Open(kHost, kPath, true, &info.fault)) return info;
 
     std::string body;
     std::vector<char> chunk(16 * 1024);
@@ -206,7 +238,8 @@ UpdateInfo CheckForUpdates()
     }
     if (body.empty())
     {
-        info.error = L"The server sent nothing back.";
+        info.fault.message = L"The server sent nothing back.";
+        info.fault.cls = L"server";
         return info;
     }
 
@@ -219,7 +252,11 @@ UpdateInfo CheckForUpdates()
     Json doc;
     if (!Json::Parse(text, doc))
     {
-        info.error = L"The server's answer could not be read.";
+        info.fault.message = L"The server's answer could not be read.";
+        // GitHub's release API does not answer 200 with something that is not
+        // JSON. A sign-in page from a hotel network does, so this counts as
+        // the user's side rather than ours.
+        info.fault.cls = L"network";
         return info;
     }
 
@@ -246,7 +283,8 @@ UpdateInfo CheckForUpdates()
     }
     if (info.zipUrl.empty())
     {
-        info.error = L"That build has nothing in it to download.";
+        info.fault.message = L"That build has nothing in it to download.";
+        info.fault.cls = L"server";
         return info;
     }
 
@@ -273,8 +311,11 @@ UpdateInfo CheckForUpdates()
 // Fetching it
 // ---------------------------------------------------------------------------
 bool DownloadUpdate(const std::wstring& url, UpdateProgressFn progress,
-                    std::wstring* err)
+                    UpdateFault* fault)
 {
+    UpdateFault scratch;
+    UpdateFault& f = fault ? *fault : scratch;
+
     // The asset lives on a different host from the API, and the URL redirects
     // again from there, so the host and path are taken from the URL rather
     // than assumed. WinHttpCrackUrl does the splitting.
@@ -287,19 +328,21 @@ bool DownloadUpdate(const std::wstring& url, UpdateProgressFn progress,
     parts.dwUrlPathLength = 2047;
     if (!WinHttpCrackUrl(url.c_str(), (DWORD)url.size(), 0, &parts))
     {
-        if (err) *err = L"That download address could not be read.";
+        f.message = L"That download address could not be read.";
+        f.cls = L"app";
         return false;
     }
 
     Http http;
-    if (!http.Open(host, path, false, err)) return false;
+    if (!http.Open(host, path, false, &f)) return false;
 
     const std::wstring to = UpdateZipPath();
     HANDLE file = CreateFileW(to.c_str(), GENERIC_WRITE, 0, nullptr,
                               CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (file == INVALID_HANDLE_VALUE)
     {
-        if (err) *err = FormatW(L"%s could not be written.", to.c_str());
+        f.message = FormatW(L"%s could not be written.", to.c_str());
+        f.cls = L"disk";
         return false;
     }
 
@@ -311,14 +354,21 @@ bool DownloadUpdate(const std::wstring& url, UpdateProgressFn progress,
     for (;;)
     {
         DWORD got = 0;
-        if (!http.Read(chunk, &got)) { ok = false; break; }
+        if (!http.Read(chunk, &got))
+        {
+            f.message = L"The download did not finish.";
+            f.cls = L"network";
+            ok = false;
+            break;
+        }
         if (got == 0) break;
 
         DWORD written = 0;
         if (!WriteFile(file, chunk.data(), got, &written, nullptr) ||
             written != got)
         {
-            if (err) *err = L"The download could not be written to disk.";
+            f.message = L"The download could not be written to disk.";
+            f.cls = L"disk";
             ok = false;
             break;
         }
@@ -326,6 +376,8 @@ bool DownloadUpdate(const std::wstring& url, UpdateProgressFn progress,
         if (progress && !progress(done, total))
         {
             // Asked to stop. Not a failure, but there is nothing usable.
+            f.message = L"The download was stopped.";
+            f.cls = L"user_cancelled";
             ok = false;
             break;
         }
@@ -335,13 +387,14 @@ bool DownloadUpdate(const std::wstring& url, UpdateProgressFn progress,
     if (!ok)
     {
         DeleteFileW(to.c_str());
-        if (err && err->empty()) *err = L"The download did not finish.";
+        if (f.message.empty()) f.message = L"The download did not finish.";
         return false;
     }
     if (total > 0 && done != total)
     {
         DeleteFileW(to.c_str());
-        if (err) *err = L"The download was cut short.";
+        f.message = L"The download was cut short.";
+        f.cls = L"network";
         return false;
     }
     return true;
@@ -354,44 +407,77 @@ bool DownloadUpdate(const std::wstring& url, UpdateProgressFn progress,
 // once FastRoute has gone: wait, unpack, copy over, tidy up, start the new one
 // and delete itself. Nothing in the zip is a settings file, so sessions.json
 // and the rest are left where they are.
+//
+// The script runs after this process has gone, so there is nobody for it to
+// put a message box in front of. What it writes instead, when it cannot do its
+// job, is a line in app_health_installer_error.txt, which the next run reads,
+// reports and deletes. It starts FastRoute again either way: a copy that comes
+// back and says what went wrong beats one that never comes back at all.
 // ---------------------------------------------------------------------------
-void ApplyUpdate()
+void ApplyUpdate(const UpdateInfo& info)
 {
     const std::wstring zip = UpdateZipPath();
     if (GetFileAttributesW(zip.c_str()) == INVALID_FILE_ATTRIBUTES)
     {
-        ErrorBox(g_mainDlg, L"The downloaded update has gone missing, so "
-                            L"nothing has been changed.");
+        const std::wstring why = L"The downloaded update has gone missing, so "
+                                 L"nothing has been changed.";
+        Health::UpdateFailed(L"install", L"app", info.version, why);
+        ErrorBox(g_mainDlg, why);
         return;
     }
 
     const std::wstring dir = ExeDir();
     const std::wstring bat = dir + L"\\update.bat";
     const std::wstring tmp = dir + L"\\update_temp";
+    const std::wstring note = Health::InstallerErrorPath();
 
     HANDLE f = CreateFileW(bat.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
                            FILE_ATTRIBUTE_NORMAL, nullptr);
     if (f == INVALID_HANDLE_VALUE)
     {
-        ErrorBox(g_mainDlg, FormatW(L"%s could not be written, so the update "
-                                    L"has not been applied.", bat.c_str()));
+        const std::wstring why =
+            FormatW(L"%s could not be written, so the update has not been "
+                    L"applied.", bat.c_str());
+        Health::UpdateFailed(L"install", L"permission", info.version, why);
+        ErrorBox(g_mainDlg, why);
         return;
     }
 
     // Written as UTF-8 without a marker: cmd reads a batch file as bytes, and
     // a byte order mark at the top of one is echoed as rubbish.
+    //
+    // Labels rather than nested parentheses: an if block with a redirection
+    // inside it is one of the places batch parsing gives way, and this script
+    // only gets one attempt, with nobody there to watch it.
+    //
+    // -ErrorAction Stop so that a failure to unpack is a terminating one and
+    // PowerShell leaves with a code to test. Without it, Expand-Archive can
+    // complain and still exit zero, and the copy that followed would be of an
+    // empty folder - which xcopy does catch, but one step later and as the
+    // wrong problem.
     const std::wstring script = FormatW(
         L"@echo off\r\n"
         L"timeout /t 2 /nobreak > nul\r\n"
         L"powershell -NoProfile -Command \"Expand-Archive -LiteralPath '%s' "
-        L"-DestinationPath '%s' -Force\"\r\n"
+        L"-DestinationPath '%s' -Force -ErrorAction Stop\"\r\n"
+        L"if errorlevel 1 goto unpackfailed\r\n"
         L"xcopy /s /y /q \"%s\\*\" \"%s\\\"\r\n"
+        L"if errorlevel 1 goto copyfailed\r\n"
+        L"goto tidy\r\n"
+        L":unpackfailed\r\n"
+        L">\"%s\" echo The downloaded update could not be unpacked.\r\n"
+        L"goto tidy\r\n"
+        L":copyfailed\r\n"
+        L">\"%s\" echo The new files could not be copied into place.\r\n"
+        L":tidy\r\n"
         L"rmdir /s /q \"%s\"\r\n"
         L"del \"%s\"\r\n"
         L"start \"\" \"%s\\%s\"\r\n"
         L"del \"%%~f0\"\r\n",
         zip.c_str(), tmp.c_str(),
         tmp.c_str(), dir.c_str(),
+        note.c_str(),
+        note.c_str(),
         tmp.c_str(),
         zip.c_str(),
         dir.c_str(), ExeName().c_str());
@@ -407,12 +493,24 @@ void ApplyUpdate()
     WriteFile(f, utf8.data(), (DWORD)(utf8.size() - 1), &written, nullptr);
     CloseHandle(f);
 
+    // Before the script rather than after, and the one report that is sent
+    // where it is made rather than queued. Two reasons, both about timing: the
+    // script gives this process two seconds to close before it replaces the
+    // exe, so nothing slow may happen between starting it and asking to close;
+    // and an update that is begun and then never heard of again is the failure
+    // most worth knowing about, so it cannot wait for a run that may not come.
+    Health::UpdateStarted(info.version, info.commit);
+
     const HINSTANCE r = ShellExecuteW(nullptr, L"open", bat.c_str(), nullptr,
                                       dir.c_str(), SW_HIDE);
     if (reinterpret_cast<intptr_t>(r) <= 32)
     {
-        ErrorBox(g_mainDlg, L"The update script could not be started, so "
-                            L"nothing has been changed.");
+        const std::wstring why = L"The update script could not be started, so "
+                                 L"nothing has been changed.";
+        // Takes the marker back as well: nothing was handed over, so the next
+        // run must not read one and report an install that never began.
+        Health::UpdateAbandoned(why);
+        ErrorBox(g_mainDlg, why);
         return;
     }
 
@@ -441,27 +539,78 @@ struct Scheduler
     std::thread thread;
     bool stop = false;
     HWND owner = nullptr;
+    // Bumped whenever the plan changes - a failed check that wants trying
+    // again sooner than the interval. A thread already asleep tells the nudge
+    // apart from the wait running out by this having moved, so being woken to
+    // re-think does not run a check that was not due.
+    unsigned replan = 0;
 };
 Scheduler g_sched;
+
+// --- a check that failed is tried again before it is believed --------------
+//
+// How long to wait before each further attempt. A check can fail for reasons
+// that pass on their own: a laptop that has just woken and has no network yet,
+// a hotel page that has not been agreed to, and - every single time we publish
+// - the few seconds in which the build job has deleted the "latest" release
+// and not yet put the new one up. None of that is worth telling anybody about,
+// and none of it is worth reporting as a fault.
+//
+// So a silent check that fails says nothing and comes back: five minutes, then
+// half an hour, then two hours. Only when every one of those has failed too -
+// something over two and a half hours of a feed that is not there - is it
+// reported to app-health as a real failure.
+const int kRetryMinutes[] = { 5, 30, 120 };
+const int kRetryCount = (int)(sizeof(kRetryMinutes) / sizeof(kRetryMinutes[0]));
+
+// How many quiet retries have been made already. -1 is "the last check was
+// fine", which is also where it goes back to once a failure has been reported.
+std::atomic<int> g_retryStep{ -1 };
+
+// Wakes the scheduler so that it works its next wait out again rather than
+// sleeping out an interval that no longer applies.
+void Replan()
+{
+    {
+        std::lock_guard<std::mutex> g(g_sched.lock);
+        ++g_sched.replan;
+    }
+    g_sched.wake.notify_all();
+}
 
 // There is no progress window. The zip is about a megabyte, so one would be on
 // screen for less time than it takes to read it; what matters more is that
 // nothing is put in front of somebody who did not ask for it.
 bool DownloadAndApply(HWND parent, const UpdateInfo& info, bool silent)
 {
-    std::wstring err;
-    if (!DownloadUpdate(info.zipUrl, nullptr, &err))
+    UpdateFault fault;
+    if (!DownloadUpdate(info.zipUrl, nullptr, &fault))
     {
+        if (fault.message.empty())
+            fault.message = L"The update could not be downloaded.";
+
         if (!silent)
-            ErrorBox(parent, err.empty()
-                ? std::wstring(L"The update could not be downloaded.") : err);
+            ErrorBox(parent, fault.message);
         else
             LogError(FormatW(L"An update to %s could not be downloaded: %s",
-                             info.version.c_str(),
-                             err.empty() ? L"no reason given." : err.c_str()));
+                             info.version.c_str(), fault.message.c_str()));
+
+        // The same publishing window as a failed check: between reading the
+        // release and fetching its zip, the build job can have taken both
+        // away. Reported only once the retries have run out, from the check
+        // that fails with them.
+        if (fault.notPublished)
+        {
+            if (silent) { g_retryStep.store(0); Replan(); }
+        }
+        else
+        {
+            Health::UpdateFailed(L"download", fault.cls, info.version,
+                                 fault.message);
+        }
         return false;
     }
-    ApplyUpdate();
+    ApplyUpdate(info);
     return true;
 }
 
@@ -469,15 +618,44 @@ void RunCheck(HWND parent, bool silent)
 {
     const UpdateInfo info = CheckForUpdates();
 
-    if (!info.error.empty())
+    if (!info.fault.message.empty())
     {
         // A failed check is not worth a box when nobody asked: a laptop that
         // was asleep, or a network that is not there yet, is the usual cause.
-        if (silent) LogError(L"Checking for an update failed: " + info.error);
-        else        ErrorBox(parent, info.error);
+        if (silent)
+        {
+            LogError(L"Checking for an update failed: " + info.fault.message);
+
+            const int tried = g_retryStep.load() + 1;
+            if (tried < kRetryCount)
+            {
+                g_retryStep.store(tried);
+                Replan();
+            }
+            else
+            {
+                g_retryStep.store(-1);
+                Health::UpdateFailed(L"check", info.fault.cls, std::wstring(),
+                                     info.fault.message);
+            }
+        }
+        else
+        {
+            ErrorBox(parent, info.fault.message);
+            // Somebody asked and has been told. Reported too, so that a feed
+            // that has gone is visible to us rather than only to them -
+            // except in the seconds around a release, when there is genuinely
+            // nothing published and the answer given was the right one.
+            if (!info.fault.notPublished)
+                Health::UpdateFailed(L"check", info.fault.cls, std::wstring(),
+                                     info.fault.message);
+        }
         g_busy.store(false);
         return;
     }
+
+    // The feed answered, so whatever was wrong before has passed.
+    if (g_retryStep.exchange(-1) != -1) Replan();
 
     if (!info.available)
     {
@@ -489,6 +667,12 @@ void RunCheck(HWND parent, bool silent)
         g_busy.store(false);
         return;
     }
+
+    // Said once per build found, so that a build which was offered and never
+    // installed is distinguishable from one that was never offered - the
+    // difference between an updater that is not working and a person who said
+    // no.
+    Health::UpdateAvailable(info.version, info.commit);
 
     // Silent means get on with it. The program restarts itself afterwards.
     if (silent)
@@ -541,22 +725,51 @@ void SchedulerThread()
     {
         int minutes = 0;
         HWND owner = nullptr;
+        bool retrying = false;
         {
             std::unique_lock<std::mutex> g(g_sched.lock);
             if (g_sched.stop) return;
             owner = g_sched.owner;
-            minutes = IntervalMinutes(g_store.settings.updateCheck);
+
+            // A check that failed and has retries left comes first: it is
+            // waiting on five minutes, not on the next hour or the next day.
+            const int step = g_retryStep.load();
+            retrying = (step >= 0 && step < kRetryCount);
+            minutes = retrying ? kRetryMinutes[step]
+                               : IntervalMinutes(g_store.settings.updateCheck);
+
+            const unsigned planned = g_sched.replan;
+            const auto changed = [&] {
+                return g_sched.stop || g_sched.replan != planned;
+            };
             if (minutes <= 0)
             {
                 // Nothing to do, but the thread stays so that turning the
                 // setting on does not need it restarted.
-                g_sched.wake.wait_for(g, std::chrono::minutes(5));
+                g_sched.wake.wait_for(g, std::chrono::minutes(5), changed);
                 continue;
             }
-            g_sched.wake.wait_for(g, std::chrono::minutes(minutes));
+            // True when it was woken rather than when the wait ran out, which
+            // is a change of plan to work out again and not a check that is
+            // due.
+            if (g_sched.wake.wait_for(g, std::chrono::minutes(minutes), changed))
+                continue;
             if (g_sched.stop) return;
-            // The setting may have changed while this was asleep.
-            if (IntervalMinutes(g_store.settings.updateCheck) <= 0) continue;
+            // The setting may have changed while this was asleep. A retry is
+            // left alone unless checking has been turned off altogether: the
+            // setting that asked for the check was on when it was made.
+            if (retrying)
+            {
+                if (g_store.settings.updateCheck == UC_NEVER)
+                {
+                    g_retryStep.store(-1);
+                    continue;
+                }
+            }
+            else if (IntervalMinutes(g_store.settings.updateCheck) <= 0)
+            {
+                continue;
+            }
         }
         Start(owner, g_store.settings.updateSilent);
     }

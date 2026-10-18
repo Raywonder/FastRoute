@@ -235,6 +235,7 @@
 #define IDC_SET_UPDATE_LABEL    1320
 #define IDC_SET_UPDATE          1321
 #define IDC_SET_UPDATE_SILENT   1322
+#define IDC_SET_SEND_HEALTH     1323
 
 // Where a session or block hotkey works: everywhere, or only in FastRoute
 #define IDC_HK_SCOPE_GLOBAL     1216
