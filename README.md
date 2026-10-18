@@ -1081,6 +1081,48 @@ A scheduled check that fails says nothing and writes to the error log instead.
 A laptop that was asleep, or a network that is not up yet, is the usual reason,
 and a box about it would be worse than useless.
 
+It also tries again before it believes it: five minutes, then half an hour,
+then two hours. Every one of those reasons passes on its own, and so does one
+more that happens on every single release - the build job deletes the `latest`
+release before publishing the new one, so for a few seconds there is genuinely
+nothing there to find. A check landing in that window answers "there is no
+build published yet", which is true, and five minutes later the build is up.
+
+### What it tells us
+
+An update that fails is worth nothing to us as a line in a log file on
+somebody else's machine. FastRoute reports to our collector at
+`https://files.tappedin.fm/app-health` when an update is offered, begun,
+installed, fails at any stage, or installs but does not reopen by itself - and
+once a day which build it is, so we know how many copies are on which build
+and following which feed. That last part is what makes a feed possible to
+retire: `Raywonder/FastRoute` against `masonasons/FastRoute` is a question
+about counts, and counts are what we did not have.
+
+A report holds a random install number that is tied to nothing, the version
+and commit, the Windows version, the feed, and a short description of the
+fault. Never a file name, a session, a device, a stream key, a password or a
+user name. The client is `src/health.cpp`, and the shared checklist every one
+of our applications follows is `app-health/INTEGRATION.md`.
+
+**Settings > Send update results and error reports** turns it off. On by
+default, because an update we break and nobody tells us about is one we go on
+shipping. Off throws away whatever was queued, and a build made with
+`-DFASTROUTE_APP_HEALTH_KEY=""` has no collector to report to at all.
+
+A failure at the person's end of the wire - offline, no DNS, a timed-out
+request, a hotel page in the way, a proxy asking for a password - is reported
+as `network`, which is counted and never alerted on. It is not their problem
+to hear about and it is not ours to fix. What is left after those are taken
+out is ours: a release that was published broken, an asset missing from one, a
+script that could not unpack or copy.
+
+The script that applies an update runs after FastRoute has gone, so there is
+nobody for it to put a message box in front of. When it cannot unpack the zip
+or copy the files it writes one line to `app_health_installer_error.txt` and
+starts FastRoute again anyway; the next run reports that line and deletes it. A
+copy that comes back and says what went wrong beats one that never comes back.
+
 ## ASIO
 
 An **ASIO Input** block and an **ASIO Output** block, for an interface with an

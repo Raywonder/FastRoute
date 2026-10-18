@@ -19,6 +19,21 @@
 // thread's entry point and starts its own.
 // ---------------------------------------------------------------------------
 
+// Why something did not work, in the two ways it has to be said: once in
+// words, for whoever is looking at the screen, and once as one of app-health's
+// classifications, so that a problem at the user's end is counted rather than
+// alerted on. See ClassifyStatus in updater.cpp for which is which.
+struct UpdateFault
+{
+    std::wstring message;              // shown, or logged
+    const wchar_t* cls = L"app";       // app-health's error_class
+    // A 404 from our own feed. The build job replaces the "latest" release by
+    // deleting it first, so every release has a few seconds in which there is
+    // genuinely nothing there - which is not a fault worth reporting until it
+    // has lasted longer than a release takes.
+    bool notPublished = false;
+};
+
 struct UpdateInfo
 {
     bool available = false;
@@ -26,8 +41,15 @@ struct UpdateInfo
     std::wstring commit;       // and which commit it was built from
     std::wstring zipUrl;
     std::wstring notes;
-    std::wstring error;        // empty unless the check itself failed
+    UpdateFault fault;         // message empty unless the check itself failed
 };
+
+// Which releases this build updates from: "api.github.com" and
+// "Raywonder/FastRoute". Reported to app-health with every report, so that a
+// feed which has to move can be retired on numbers rather than on hope - and
+// so a fork that repoints its updater is counted as its own thing.
+const wchar_t* UpdateFeedHost();
+const wchar_t* UpdateFeedRepo();
 
 // What the server has. Blocking; call from a background thread.
 UpdateInfo CheckForUpdates();
@@ -37,11 +59,13 @@ UpdateInfo CheckForUpdates();
 // up. Blocking.
 using UpdateProgressFn = std::function<bool(unsigned long long, unsigned long long)>;
 bool DownloadUpdate(const std::wstring& url, UpdateProgressFn progress,
-                    std::wstring* err);
+                    UpdateFault* fault);
 
 // Unpacks what was downloaded over this folder and restarts. This does not
-// return: it asks the application to close so that the exe can be replaced.
-void ApplyUpdate();
+// return anything useful: it asks the application to close so that the exe can
+// be replaced. The build being installed is passed in so that the next run can
+// tell whether it arrived, and so app-health knows what was attempted.
+void ApplyUpdate(const UpdateInfo& info);
 
 // The UI thread's way in. Checks on a thread of its own and then, on the UI
 // thread, either offers the update or says there is none - except when silent,

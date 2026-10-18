@@ -1,5 +1,6 @@
 #include "app.h"
 #include "updater.h"
+#include "health.h"
 #include "audio/asiodev.h"
 #include <map>
 #include <memory>
@@ -166,6 +167,12 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, LPWSTR, int)
 
     g_store.Load();
 
+    // What became of the last update, and one line a day so that the builds in
+    // use can be counted. The setting is read first: with reporting off this
+    // sends nothing, queues nothing and writes nothing down.
+    Health::SetEnabled(g_store.settings.sendHealth);
+    Health::OnStartup();
+
     g_mainDlg = CreateDialogParamW(inst, MAKEINTRESOURCEW(IDD_MAIN), nullptr,
                                    MainDlgProc, 0);
     if (!g_mainDlg)
@@ -208,6 +215,7 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, LPWSTR, int)
     }
 
     StopUpdateChecks();
+    Health::Shutdown();
     StopAllSessions();
     CoUninitialize();
     return (int)msg.wParam;
