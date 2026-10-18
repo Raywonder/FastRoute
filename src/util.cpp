@@ -179,3 +179,84 @@ bool DirectoryExists(const std::wstring& path)
     const DWORD a = GetFileAttributesW(path.c_str());
     return a != INVALID_FILE_ATTRIBUTES && (a & FILE_ATTRIBUTE_DIRECTORY) != 0;
 }
+
+// ---------------------------------------------------------------------------
+// Protected text
+// ---------------------------------------------------------------------------
+#include <wincrypt.h>
+
+std::wstring ProtectText(const std::wstring& plain)
+{
+    if (plain.empty()) return std::wstring();
+    DATA_BLOB in;
+    in.pbData = (BYTE*)plain.data();
+    in.cbData = (DWORD)(plain.size() * sizeof(wchar_t));
+    DATA_BLOB out = {};
+    if (!CryptProtectData(&in, L"FastRoute", nullptr, nullptr, nullptr,
+                          CRYPTPROTECT_UI_FORBIDDEN, &out))
+        return std::wstring();
+    DWORD n = 0;
+    CryptBinaryToStringW(out.pbData, out.cbData, CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF,
+                         nullptr, &n);
+    std::wstring b64(n, L'\0');
+    if (n) CryptBinaryToStringW(out.pbData, out.cbData,
+                                CRYPT_STRING_BASE64 | CRYPT_STRING_NOCRLF, &b64[0], &n);
+    LocalFree(out.pbData);
+    b64.resize(n);
+    return b64;
+}
+
+std::wstring UnprotectText(const std::wstring& stored)
+{
+    if (stored.empty()) return std::wstring();
+    DWORD n = 0;
+    if (!CryptStringToBinaryW(stored.c_str(), (DWORD)stored.size(), CRYPT_STRING_BASE64,
+                              nullptr, &n, nullptr, nullptr) || n == 0)
+        return std::wstring();
+    std::vector<BYTE> bin(n);
+    if (!CryptStringToBinaryW(stored.c_str(), (DWORD)stored.size(), CRYPT_STRING_BASE64,
+                              bin.data(), &n, nullptr, nullptr))
+        return std::wstring();
+    DATA_BLOB in = { n, bin.data() };
+    DATA_BLOB out = {};
+    if (!CryptUnprotectData(&in, nullptr, nullptr, nullptr, nullptr,
+                            CRYPTPROTECT_UI_FORBIDDEN, &out))
+        return std::wstring();
+    std::wstring plain((const wchar_t*)out.pbData, out.cbData / sizeof(wchar_t));
+    SecureZeroMemory(out.pbData, out.cbData);
+    LocalFree(out.pbData);
+    return plain;
+}
+
+// ---------------------------------------------------------------------------
+// Announcements
+// ---------------------------------------------------------------------------
+#include <oleacc.h>
+
+void Announce(HWND ctl, const std::wstring& text)
+{
+    if (!ctl) return;
+    SetWindowTextW(ctl, text.c_str());
+
+    // LiveSetting_Property_GUID and Polite, from UIAutomationCoreApi.h, which
+    // is not otherwise needed here.
+    static const GUID kLiveSetting =
+        { 0xc12bcd8e, 0x2a8e, 0x4950, { 0x8a, 0xe7, 0x36, 0x25, 0x11, 0x1d, 0x58, 0xeb } };
+    if (!GetPropW(ctl, L"FR_LIVE"))
+    {
+        IAccPropServices* ps = nullptr;
+        if (SUCCEEDED(CoCreateInstance(__uuidof(CAccPropServices), nullptr, CLSCTX_INPROC_SERVER,
+                                       IID_PPV_ARGS(&ps))) && ps)
+        {
+            VARIANT v;
+            VariantInit(&v);
+            v.vt = VT_I4;
+            v.lVal = 1;   // Polite
+            ps->SetHwndProp(ctl, (DWORD)OBJID_CLIENT, CHILDID_SELF, kLiveSetting, v);
+            ps->Release();
+        }
+        SetPropW(ctl, L"FR_LIVE", (HANDLE)1);
+    }
+    const DWORD kLiveRegionChanged = 0x8019;   // EVENT_OBJECT_LIVEREGIONCHANGED
+    NotifyWinEvent(kLiveRegionChanged, ctl, OBJID_CLIENT, CHILDID_SELF);
+}

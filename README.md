@@ -55,6 +55,7 @@ The executable lands in `build\Release\FastRoute.exe`.
 | Output Blocks | Output Device | render endpoint (or system default), volume       |
 | Output Blocks | Recorder      | folder, file name template, format, bitrate, silence gate, file splitting, volume |
 | Output Blocks | Net Send      | protocol, group or host, port, stream name, codec, packet length, Opus bitrate, hop limit, volume |
+| Output Blocks | Stream Out    | server type (RTMP, Icecast 2, Shoutcast 1 or 2), address, mount or stream ID, user, stream key or password, format, bitrate, station name, genre, description, website, public listing, now playing title, reconnect, volume |
 
 The library tree groups these under **Input Blocks**, **Built-in Effects**,
 **External Effects** and **Output Blocks**. External Effects is whatever CLAP
@@ -920,6 +921,99 @@ to keep.
 A Net Send block clocks nothing, the same as a recorder, so a session whose only
 output is a Net Send block still gets a device opened purely to drive the graph.
 
+## Streaming live: Stream Out
+
+**Stream Out** is an output block that puts whatever is above it in the list
+on a live streaming server. One block covers four kinds of server, chosen with
+**Server type**:
+
+| Server type | Formats | What it needs |
+| --- | --- | --- |
+| RTMP (AAA Streamer and most streaming platforms) | AAC | address such as `rtmp://aaastreamer.devinecreations.net:1935/live`, stream key |
+| Icecast 2 | AAC, MP3, Ogg Opus, Ogg Vorbis | `host:port`, mount point such as `/live`, user (blank means `source`), source password |
+| Shoutcast 1 | AAC, MP3 | `host:port`, source password (it connects to the port after the one given) |
+| Shoutcast 2 | AAC, MP3 | `host:port`, stream ID, user (optional), password |
+
+Everything is sent as 48 kHz stereo; a session running at another rate is
+converted on the way out. AAC and MP3 come from the encoders Windows ships
+(Media Foundation), Opus and Vorbis from the same libraries the Recorder uses.
+MP3 is only offered where Windows has an MP3 encoder (Windows 8 and later; on
+Windows 7 the dialog says it is missing and AAC is the choice). RTMP is always
+AAC-LC, because that is what HLS players in every browser can play, and HLS is
+what a streaming platform turns an RTMP stream into. AAC bitrates are 96, 128,
+160 or 192 kbps, the four the Windows encoder takes; 192 is the default.
+
+**Station name, genre, description, website** and **List it in public
+directories** go to Icecast and Shoutcast servers when the stream connects.
+**Now playing title** is sent to the server's admin page as soon as the
+stream connects and again whenever it changes and you press **Apply**, without
+dropping the stream. Ogg streams carry their title inside the stream, so on
+Ogg changing the title reconnects. RTMP has no title of its own; the platform
+names the stream.
+
+### AAA Streamer
+
+**AAA Streamer...** in the block's dialog signs in to AAA Streamer and fills
+the block in from one of your streams. Signing in works the way a television
+signs in to a streaming service: FastRoute asks AAA Streamer for a code, opens
+the approval page in your browser, and waits while you approve it there. No
+password is typed into FastRoute. If the page asks you to sign in first, sign
+in, then press **Open the sign-in page again**; the code lasts ten minutes.
+Once you are signed in, the dialog lists the streams your account owns; pick
+one and press **Use this stream**, and the address and stream key are filled
+in for you.
+
+The sign-in is kept per Windows user, encrypted with the Windows data
+protection API, in `%APPDATA%\FastRoute\aaastreamer-token.dat`, not in the
+portable folder, so copying FastRoute to someone else does not hand them your
+account. **Sign out** forgets it.
+
+Sending into a VoiceLink room with a VoiceLink sign-in is not in this build:
+VoiceLink does not yet have a way for a program to get a stream key for a room
+and make the room play it. Until it does, stream to an AAA Streamer stream and
+share or play that stream in the room.
+
+### Keys and passwords
+
+The stream key or source password is never shown in the block list, the status
+line or the error log. In `sessions.json` it is stored encrypted for the
+Windows user who saved it (`outKeyProtected`). On another machine or another
+Windows account it cannot be decrypted, so the block comes back with the key
+empty and has to be given it again. **Show the key** in the dialog shows what
+is typed.
+
+### Connecting, dropping and coming back
+
+The block connects when the session runs. While connected, the session
+window's times field shows a line such as "Stream Out: live on
+aaastreamer.devinecreations.net, AAC 192 kbps, 3.2 MB sent". Changes are also
+spoken through the status line, whatever has focus: "Stream Out connecting",
+"Stream Out is live", "Stream Out is not connected, reconnecting", and why it
+stopped if it gives up. An outage is announced once, not on every try. With
+**Reconnect automatically** on (the default) it tries again after 2 seconds,
+then 4, 8 and so on up to a minute, quietly; each new reason goes in the error
+log once. It is live, so while the connection is down the audio is dropped
+rather than saved up, and the stream carries on from the moment it is back.
+
+Like Net Send, Stream Out clocks nothing, so a session whose only output is a
+Stream Out block still gets a device opened to drive it. To send one thing to
+the stream and hear something else, put the Stream Out block above the blocks
+that should not be streamed - your own microphone, say - and an Output Device
+block at the end.
+
+### Checking it from the command line
+
+`tools/streamout_selftest.cpp` publishes a few seconds of a tone, 440 Hz on the
+left and 660 Hz on the right, with the same encoder and protocol code. It is
+not part of the release build; configure with `-DFASTROUTE_SELFTEST=ON`. The
+source password is read from the `FR_SELFTEST_PASS` environment variable so it
+never appears on a command line.
+
+```
+streamout_selftest rtmp rtmp://host:1935/live KEY 10
+streamout_selftest icecast host:8000 /test source aac 10 128
+```
+
 ## Builds, and updating itself
 
 Every push to `main` builds on GitHub and replaces one release, tagged
@@ -946,10 +1040,34 @@ with it without asking first.
 Off by default. A program that phones home unasked should be asked first, and
 Settings is where to ask.
 
+Updates come from this fork's own releases, the "latest" release of
+https://github.com/Raywonder/FastRoute, never from the original project, so an
+update cannot replace this build with one that lacks its features.
+
 What it compares is the commit where it can and the version where it cannot.
 The commit is exact; the version is the fallback for a build that was made
 without git to ask, and it is compared the way a person reads it, so 0.10 is
 newer than 0.6 rather than older as a plain string comparison would have it.
+
+Comparing by commit answers "is this the build I am running", not "is this
+build newer" - two hashes have no order. Within one release line that is the
+better question, since the version only moves when somebody moves it and every
+build between two versions would otherwise look identical. Across release
+lines it is why the paragraph below matters: a copy pointed at somebody else's
+releases treats whatever is published there as an update, whichever way round
+the two builds actually go.
+
+**A copy that came from the original project will not update to this one.**
+The address the updater asks is compiled in, so builds made before it was
+changed go on asking `masonasons/FastRoute` for as long as they are kept, and
+that is not a repository this fork can redirect or mirror. There is no upgrade
+path from one to the other: download this build and unpack it over the old
+folder by hand, once. After that its updates arrive on their own as usual.
+Until then, such a copy is pointed at a release line that moves independently
+of this one, and by the paragraph above it will offer those builds as updates -
+so either install this one by hand or set **Look for a new version of
+FastRoute** to **Never** in Settings, because accepting one of those offers
+replaces this build with one that has none of its features.
 
 Applying one is a batch file, because an exe cannot overwrite itself while it
 is running: FastRoute writes the script, asks itself to close, and the script
@@ -1015,6 +1133,20 @@ The driver is opened only when it is needed: listing the installed drivers
 reads the registry, and nothing takes the hardware until a driver is actually
 picked or a session starts. Stopping a session closes it again, because an
 interface held open is one nothing else can use.
+
+**Streaming Reaper through ReaRoute.** An ASIO Input block set to the ReaRoute
+ASIO driver, channels ReaRoute 1 and 2, followed by a Stream Out block, sends
+Reaper's output to the stream; Stream Out takes whatever is on the bus above
+it and does not care where it came from. Three things to know. With no other
+output in the session, the clock is a Windows device opened silently on the
+default output, so ReaRoute runs through the drift buffer described above; add
+an Output Device block if you also want to hear it. ReaRoute's rate is Reaper's
+project rate and it cannot be changed from here, so set Reaper and the Windows
+default output to the same rate (48000 Hz is best, since the stream is 48 kHz
+anyway); otherwise the session is refused and says which rate to set. And one
+ASIO driver per program means that while a session uses ReaRoute, no session
+in FastRoute can use your audio interface's own ASIO driver at the same time -
+use its Windows (WASAPI) device for your microphone or monitoring instead.
 
 ## Block actions, and the buffer
 

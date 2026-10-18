@@ -51,3 +51,17 @@ std::wstring ResolveRecordFolder(const std::wstring& folder);
 std::wstring DurationText(int seconds);
 // "1.4 MB", "812 KB". Same idea: the unit that makes the number small.
 std::wstring SizeText(unsigned long long bytes);
+
+// Secrets kept in the settings file: a stream key, a source password. Encrypted
+// with the Windows data protection API for the current Windows user, and
+// written as base64. Unprotect gives back an empty string for anything it
+// cannot decrypt - another user's, another machine's, or a damaged value.
+std::wstring ProtectText(const std::wstring& plain);
+std::wstring UnprotectText(const std::wstring& stored);
+
+// Puts text in a control and asks screen readers to read it out even though
+// focus is somewhere else: the control is marked as a polite live region (the
+// same thing aria-live does on a web page) and the live region event is
+// raised. Windows 7 has no such event and simply ignores it; the text is
+// still there to be read.
+void Announce(HWND ctl, const std::wstring& text);
