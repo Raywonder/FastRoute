@@ -1049,6 +1049,26 @@ The commit is exact; the version is the fallback for a build that was made
 without git to ask, and it is compared the way a person reads it, so 0.10 is
 newer than 0.6 rather than older as a plain string comparison would have it.
 
+Comparing by commit answers "is this the build I am running", not "is this
+build newer" - two hashes have no order. Within one release line that is the
+better question, since the version only moves when somebody moves it and every
+build between two versions would otherwise look identical. Across release
+lines it is why the paragraph below matters: a copy pointed at somebody else's
+releases treats whatever is published there as an update, whichever way round
+the two builds actually go.
+
+**A copy that came from the original project will not update to this one.**
+The address the updater asks is compiled in, so builds made before it was
+changed go on asking `masonasons/FastRoute` for as long as they are kept, and
+that is not a repository this fork can redirect or mirror. There is no upgrade
+path from one to the other: download this build and unpack it over the old
+folder by hand, once. After that its updates arrive on their own as usual.
+Until then, such a copy is pointed at a release line that moves independently
+of this one, and by the paragraph above it will offer those builds as updates -
+so either install this one by hand or set **Look for a new version of
+FastRoute** to **Never** in Settings, because accepting one of those offers
+replaces this build with one that has none of its features.
+
 Applying one is a batch file, because an exe cannot overwrite itself while it
 is running: FastRoute writes the script, asks itself to close, and the script
 waits, unpacks the zip over the folder, starts the new copy and deletes itself.

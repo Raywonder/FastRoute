@@ -159,6 +159,23 @@ jobs:
             program, so the whole folder can go on a memory stick.
 
             Windows 7 SP1 or later, 64 bit.
+
+            ## Coming from a build of the original project
+
+            If the copy you have now came from masonasons/FastRoute, it will
+            not update itself to this one. The address its updater asks is
+            compiled in, so it goes on asking that project's releases, and
+            this fork cannot redirect them. Unpack the zip above over your
+            existing folder by hand, this once. Your settings sit beside the
+            program and are left alone, and from then on the updater points
+            here, so later builds arrive on their own.
+
+            Worth doing rather than leaving: a copy still pointed at the
+            original project will offer that project's builds as updates, and
+            accepting one replaces this build with one that has none of the
+            features added here. Until you have installed this build by hand,
+            set **Look for a new version of FastRoute** to **Never** in
+            Settings, or say no when it asks.
           files: artifacts/*
           prerelease: true
           make_latest: false
