@@ -749,7 +749,7 @@ BEGIN
     COMBOBOX        IDC_SO_SERVER, 7, 21, 220, 100,
                     CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     PUSHBUTTON      "AAA Strea&mer...", IDC_SO_AAA, 235, 20, 88, 14
-    LTEXT           "Server &address:", IDC_SO_URL_LABEL, 7, 41, 316, 9
+    LTEXT           "Server addr&ess:", IDC_SO_URL_LABEL, 7, 41, 316, 9
     EDITTEXT        IDC_SO_URL, 7, 53, 316, 14, ES_AUTOHSCROLL | WS_TABSTOP
     LTEXT           "Mount p&oint:", IDC_SO_MOUNT_LABEL, 7, 73, 150, 9
     EDITTEXT        IDC_SO_MOUNT, 7, 85, 150, 14, ES_AUTOHSCROLL | WS_TABSTOP
@@ -767,7 +767,7 @@ BEGIN
     LTEXT           "&Bitrate:", -1, 165, 150, 158, 9
     COMBOBOX        IDC_SO_KBPS, 165, 162, 100, 120,
                     CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "Station na&me:", IDC_SO_NAME_LABEL, 7, 182, 150, 9
+    LTEXT           "&Station name:", IDC_SO_NAME_LABEL, 7, 182, 150, 9
     EDITTEXT        IDC_SO_NAME, 7, 194, 150, 14, ES_AUTOHSCROLL | WS_TABSTOP
     LTEXT           "&Genre:", IDC_SO_GENRE_LABEL, 165, 182, 158, 9
     EDITTEXT        IDC_SO_GENRE, 165, 194, 158, 14, ES_AUTOHSCROLL | WS_TABSTOP
@@ -798,7 +798,7 @@ STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMEN
 CAPTION "AAA Streamer"
 FONT 9, "Segoe UI", 400, 0, 0x1
 BEGIN
-    LTEXT           "&Status:", -1, 7, 7, 286, 9
+    LTEXT           "Status:", -1, 7, 7, 286, 9
     EDITTEXT        IDC_AAA_STATUS, 7, 19, 286, 44,
                     ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | WS_VSCROLL | WS_TABSTOP
     PUSHBUTTON      "&Sign in...", IDC_AAA_SIGNIN, 7, 69, 70, 14

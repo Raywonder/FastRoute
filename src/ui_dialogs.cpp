@@ -3262,7 +3262,10 @@ static void FillSoFormats(HWND dlg, int want)
     SendMessageW(c, CB_SETCURSEL, (WPARAM)sel, 0);
 }
 
-static void SyncStreamOutFields(HWND dlg)
+// announce: speak the note as a live region. True for a change the user just
+// made (picking a server type), false while the dialog is still being built -
+// there the note is read with the rest of the dialog on open.
+static void SyncStreamOutFields(HWND dlg, bool announce)
 {
     const int server = SoServer(dlg);
     const bool rtmp = server == OS_RTMP;
@@ -3272,9 +3275,9 @@ static void SyncStreamOutFields(HWND dlg)
     // The labels say what the field is for this kind of server, since the
     // same box is a stream key for one and a password for the others.
     SetDlgItemTextW(dlg, IDC_SO_URL_LABEL,
-                    rtmp ? L"Server &address, such as rtmp://aaastreamer.devinecreations.net:1935/live:"
-                         : L"Server &address and port, such as stream.example.com:8000:");
-    SetDlgItemTextW(dlg, IDC_SO_KEY_LABEL, rtmp ? L"Stream &key:" : L"Source pass&word:");
+                    rtmp ? L"Server addr&ess, such as rtmp://aaastreamer.devinecreations.net:1935/live:"
+                         : L"Server addr&ess and port, such as stream.example.com:8000:");
+    SetDlgItemTextW(dlg, IDC_SO_KEY_LABEL, rtmp ? L"Stream &key:" : L"Sour&ce password:");
     SetDlgItemTextW(dlg, IDC_SO_SHOWKEY, rtmp ? L"S&how the key" : L"S&how the password");
 
     const int on[][2] = {
@@ -3302,7 +3305,17 @@ static void SyncStreamOutFields(HWND dlg)
                L"one given here.";
     if (!rtmp && !(MediaFoundationAvailable() && AacEncoder::Mp3Available()))
         note += L" MP3 is not offered: Windows on this machine has no MP3 encoder.";
-    SetDlgItemTextW(dlg, IDC_SO_NOTE, note.c_str());
+
+    // Picking a server type also switches about a dozen fields on and off, which
+    // is silent on its own, so the note carries it too. Kept short: this static
+    // shows about two lines, and anything past that is spoken but not seen.
+    if (rtmp)       note += L" The station details are not used.";
+    else if (ice)   note += L" Stream ID is not used.";
+    else if (sc2)   note += L" Mount point is not used.";
+    else            note += L" Mount point, stream ID and user name are not used.";
+
+    if (announce) Announce(GetDlgItem(dlg, IDC_SO_NOTE), note);
+    else          SetDlgItemTextW(dlg, IDC_SO_NOTE, note.c_str());
 }
 
 static std::wstring SoText(HWND dlg, int id)
@@ -3406,7 +3419,9 @@ static INT_PTR CALLBACK AaaDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
             L"Your browser is opening the AAA Streamer approval page. Approve FastRoute "
             L"there. If the page asks you to sign in first, sign in, then press Open the "
             L"sign-in page again. The code is %s. Waiting for approval; this code works "
-            L"for 10 minutes.", m->start.userCode.c_str()));
+            L"for 10 minutes. If no browser opens, the address is %s - this box can be "
+            L"copied with Control plus C.",
+            m->start.userCode.c_str(), ctx->authorizeUrl.c_str()));
 
         // Ask every three seconds until it is approved, refused or expired.
         const std::wstring token = m->start.pollToken;
@@ -3589,7 +3604,7 @@ static INT_PTR CALLBACK StreamOutDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM l
 
         CheckDlgButton(dlg, IDC_BLOCK_ENABLED, b->enabled ? BST_CHECKED : BST_UNCHECKED);
         SetupVolumeSlider(dlg, b->volumePct);
-        SyncStreamOutFields(dlg);
+        SyncStreamOutFields(dlg, false);
         return TRUE;
     }
 
@@ -3610,7 +3625,7 @@ static INT_PTR CALLBACK StreamOutDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM l
                 const int fmt = SoFormat(dlg), kbps = SoKbps(dlg);
                 FillSoFormats(dlg, fmt);
                 FillSoKbps(dlg, kbps);
-                SyncStreamOutFields(dlg);
+                SyncStreamOutFields(dlg, true);
             }
             return TRUE;
 
@@ -3638,7 +3653,7 @@ static INT_PTR CALLBACK StreamOutDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM l
                 SendDlgItemMessageW(dlg, IDC_SO_SERVER, CB_SETCURSEL, OS_RTMP, 0);
                 FillSoFormats(dlg, 0);
                 FillSoKbps(dlg, SoKbps(dlg));
-                SyncStreamOutFields(dlg);
+                SyncStreamOutFields(dlg, false);
                 SetDlgItemTextW(dlg, IDC_SO_URL, ctx.chosen.rtmpUrl.c_str());
                 SetDlgItemTextW(dlg, IDC_SO_KEY, ctx.chosen.key.c_str());
                 SetPropW(dlg, L"FR_AAA_TITLE", (HANDLE)new std::wstring(ctx.chosen.title));
