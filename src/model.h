@@ -621,6 +621,16 @@ struct Block
     std::wstring outMount;      // Icecast mount point, "/live"
     std::wstring outUser;       // Icecast or Shoutcast 2 user; blank is "source"
     std::wstring outKey;        // stream key (RTMP) or source password
+    // The key exactly as it sits in the settings file, encrypted. Kept so that
+    // a key this Windows account cannot decrypt is written back untouched
+    // instead of being dropped: the settings folder is meant to travel on a
+    // memory stick, and saving on a second machine would otherwise destroy the
+    // key for the machine that owns it as well. Never shown and never sent.
+    std::wstring outKeyStored;
+    // True when there was a key on disk and it could not be decrypted here -
+    // another Windows account, another machine, or a damaged value. The block
+    // refuses to start and says so, rather than streaming with no key.
+    bool outKeyUnreadable = false;
     int  outSid = 1;            // Shoutcast 2 stream id
     int  outFormat = 0;         // a StreamFormat; RTMP is always AAC
     int  outKbps = 192;

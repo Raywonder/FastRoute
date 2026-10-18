@@ -1,10 +1,37 @@
 #include "app.h"
 #include <map>
 #include <algorithm>
+#include <new>
 
 static std::map<int, HWND> g_windows;
 static HACCEL g_sessionAccel = nullptr;
 static bool g_syncingChecks = false;   // ignore our own check-state updates
+
+// ---------------------------------------------------------------------------
+
+// What this window has already said out loud, one count per block, hung off
+// the window so that several windows watching the same session each speak
+// once. Made on first use and freed in WM_DESTROY.
+static const wchar_t* kEventsProp = L"FR_EVENTS";
+
+static std::map<int, unsigned>* EventsSeen(HWND dlg)
+{
+    auto* m = (std::map<int, unsigned>*)GetPropW(dlg, kEventsProp);
+    if (!m)
+    {
+        m = new (std::nothrow) std::map<int, unsigned>();
+        if (!m) return nullptr;
+        if (!SetPropW(dlg, kEventsProp, (HANDLE)m)) { delete m; return nullptr; }
+    }
+    return m;
+}
+
+static void FreeEventsSeen(HWND dlg)
+{
+    auto* m = (std::map<int, unsigned>*)GetPropW(dlg, kEventsProp);
+    RemovePropW(dlg, kEventsProp);
+    delete m;
+}
 
 // ---------------------------------------------------------------------------
 
@@ -817,22 +844,36 @@ static INT_PTR CALLBACK SessionDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
         // A Stream Out block that has connected, dropped or given up says so
         // out loud, once, whatever has focus: there is otherwise no way to
         // know a stream went down without going and reading the times field.
+        // Each block's own count is remembered separately. One count for the
+        // whole session cannot tell a main stream's change from a backup
+        // stream's, so the wrong stream's name used to be spoken.
         {
             Engine::Status st;
             const int sid = SessionIdOf(dlg);
-            unsigned serial = 0;
-            std::wstring said;
-            if (SessionRunning(sid) && SessionStatus(sid, &st))
+            std::map<int, unsigned>* seen = EventsSeen(dlg);
+            // A stopped session forgets its counts: the next start builds new
+            // sinks counting from zero, and a leftover count of 1 would eat
+            // the first thing the restarted block says.
+            if (seen && !SessionRunning(sid)) seen->clear();
+            if (seen && SessionRunning(sid) && SessionStatus(sid, &st))
             {
-                serial = st.eventSerial;
-                said = st.eventText;
-            }
-            const unsigned seen = (unsigned)(UINT_PTR)GetPropW(dlg, L"FR_EVENTS");
-            if (serial != seen)
-            {
-                SetPropW(dlg, L"FR_EVENTS", (HANDLE)(UINT_PTR)serial);
-                if (serial > seen && !said.empty())
-                    Announce(GetDlgItem(dlg, IDC_SESSION_STATE), said);
+                // Everything that changed since the last tick, in block order,
+                // so two streams changing together are both heard rather than
+                // one of them overwriting the other.
+                std::wstring say;
+                for (const Engine::Status::SinkEvent& ev : st.events)
+                {
+                    unsigned& was = (*seen)[ev.blockIndex];
+                    // Not "greater than": a restarted block counts from zero
+                    // again, and its first state is news.
+                    if (ev.serial == was) continue;
+                    was = ev.serial;
+                    if (ev.text.empty()) continue;
+                    if (!say.empty()) say += L" ";
+                    say += ev.text;
+                }
+                if (!say.empty())
+                    Announce(GetDlgItem(dlg, IDC_SESSION_STATE), say);
             }
         }
 
@@ -854,7 +895,7 @@ static INT_PTR CALLBACK SessionDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
         return TRUE;
 
     case WM_DESTROY:
-        RemovePropW(dlg, L"FR_EVENTS");
+        FreeEventsSeen(dlg);
     {
         KillTimer(dlg, 1);
         int id = SessionIdOf(dlg);

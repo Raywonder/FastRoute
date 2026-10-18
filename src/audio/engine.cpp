@@ -636,8 +636,10 @@ void Engine::GetStatus(Status* st)
         st->runSeconds = (int)((GetTickCount64() - m_startTick) / 1000);
 
     int fxFrames = 0;
+    int nodeIndex = -1;
     for (std::unique_ptr<Node>& n : m_nodes)
     {
+        ++nodeIndex;
         if (n->fx)
         {
             fxFrames += n->fx->LatencyFrames();
@@ -648,13 +650,14 @@ void Engine::GetStatus(Status* st)
         {
             std::wstring line = n->net->StatusText();
             if (!line.empty()) st->blockStatus.push_back(line);
-            std::wstring said;
-            const unsigned serial = n->net->EventSerial(&said);
-            if (serial)
-            {
-                st->eventSerial += serial;
-                if (!said.empty()) st->eventText = said;
-            }
+            // Each sink's own count and its own words, kept apart. Folding
+            // them together loses which block changed: with a main and a
+            // backup stream the sum rises either way and the text is
+            // whichever block comes last in the list.
+            Status::SinkEvent ev;
+            ev.blockIndex = nodeIndex;
+            ev.serial = n->net->EventSerial(&ev.text);
+            if (ev.serial) st->events.push_back(ev);
         }
         if (n->capture && st->following.empty()) st->following = n->capture->TargetName();
         // With several recordings going, the one that has written most is the

@@ -1175,9 +1175,14 @@ void SessionStore::Load()
                     b.outMount     = jb.AsString(L"outMount");
                     b.outUser      = jb.AsString(L"outUser");
                     // Encrypted for the Windows user who saved it. On another
-                    // machine or account it cannot be read, and the block
-                    // asks for it again rather than streaming with nothing.
-                    b.outKey       = UnprotectText(jb.AsString(L"outKeyProtected"));
+                    // machine or account it cannot be read; the ciphertext is
+                    // kept exactly as it was so that saving here cannot destroy
+                    // it, and the block asks for the key again rather than
+                    // streaming with nothing - StreamOut::Start refuses and
+                    // says why.
+                    b.outKeyStored = jb.AsString(L"outKeyProtected");
+                    b.outKey       = UnprotectText(b.outKeyStored);
+                    b.outKeyUnreadable = !b.outKeyStored.empty() && b.outKey.empty();
                     b.outSid       = jb.AsInt(L"outSid", 1);
                     b.outFormat    = jb.AsInt(L"outFormat", 0);
                     if (b.outFormat < 0 || b.outFormat > 3) b.outFormat = 0;
@@ -1462,8 +1467,29 @@ bool SessionStore::Save(std::wstring* err) const
                 jb.Set(L"outUrl", Json::Str(b.outUrl));
                 jb.Set(L"outMount", Json::Str(b.outMount));
                 jb.Set(L"outUser", Json::Str(b.outUser));
+                // Saving rewrites the whole file, so a field left out here is a
+                // field deleted. Three cases, and none of them may lose a key:
+                //
+                //  - a key we can read: encrypt it. If encrypting fails, keep
+                //    what was on disk rather than writing a blank, the way
+                //    aaa::SaveToken does.
+                //  - a key this account cannot decrypt: write the stored
+                //    ciphertext back byte for byte. The account that owns it
+                //    still has its key, here and when the folder travels back.
+                //  - no key, and none was stored: write nothing, as before.
+                //
+                // A key the user cleared on purpose is the second case only
+                // when it was never readable, so clearing still clears.
                 if (!b.outKey.empty())
-                    jb.Set(L"outKeyProtected", Json::Str(ProtectText(b.outKey)));
+                {
+                    const std::wstring prot = ProtectText(b.outKey);
+                    if (!prot.empty())
+                        jb.Set(L"outKeyProtected", Json::Str(prot));
+                    else if (!b.outKeyStored.empty())
+                        jb.Set(L"outKeyProtected", Json::Str(b.outKeyStored));
+                }
+                else if (b.outKeyUnreadable && !b.outKeyStored.empty())
+                    jb.Set(L"outKeyProtected", Json::Str(b.outKeyStored));
                 jb.Set(L"outSid", Json::Num(b.outSid));
                 jb.Set(L"outFormat", Json::Num(b.outFormat));
                 jb.Set(L"outKbps", Json::Num(b.outKbps));

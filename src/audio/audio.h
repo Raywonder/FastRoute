@@ -761,10 +761,19 @@ public:
         // A line per block that has something to say beyond its parameters,
         // already named. The buffer uses it to say how far back it is.
         std::vector<std::wstring> blockStatus;
-        // The sum of every sink's EventSerial, and the latest thing one of
-        // them said. A window that remembers the sum knows when to speak.
-        unsigned eventSerial = 0;
-        std::wstring eventText;
+        // One entry per sink that has something to say out loud, in block
+        // order. Kept per block rather than folded into one count and one
+        // string: with two Stream Out blocks running, a sum cannot say which
+        // of them changed, and the last text written wins - so the dialog
+        // would announce one stream's state under the other stream's name.
+        // A window that remembers each block's own serial knows when to speak.
+        struct SinkEvent
+        {
+            int blockIndex = -1;     // position in the session's block list
+            unsigned serial = 0;     // that sink's own count, from zero
+            std::wstring text;       // what to say; empty means nothing to say
+        };
+        std::vector<SinkEvent> events;
     };
     void GetStatus(Status* st);
 

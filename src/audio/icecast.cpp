@@ -3,6 +3,7 @@
 #include <windows.h>
 
 #include "icecast.h"
+#include "netdial.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -101,8 +102,11 @@ uintptr_t Dial(const std::string& host, int port, unsigned long long deadline,
                         L". Check the address and the internet connection.";
         return kNoSocket;
     }
+    int addrsLeft = 0;
+    for (addrinfo* a = res; a; a = a->ai_next) ++addrsLeft;
+
     uintptr_t out = kNoSocket;
-    for (addrinfo* a = res; a && out == kNoSocket; a = a->ai_next)
+    for (addrinfo* a = res; a && out == kNoSocket; a = a->ai_next, --addrsLeft)
     {
         SOCKET s = socket(a->ai_family, a->ai_socktype, a->ai_protocol);
         if (s == INVALID_SOCKET) continue;
@@ -113,6 +117,10 @@ uintptr_t Dial(const std::string& host, int port, unsigned long long deadline,
         {
             unsigned long long now = GetTickCount64();
             unsigned long long left = now < deadline ? deadline - now : 0;
+            // A slice each while there are others to try, so one address that
+            // swallows the connection cannot use up the whole budget and leave
+            // the working address with no time at all. See netdial.h.
+            if (addrsLeft > 1 && left > kAddressTryMs) left = kAddressTryMs;
             fd_set ws, es;
             FD_ZERO(&ws); FD_SET(s, &ws);
             FD_ZERO(&es); FD_SET(s, &es);
@@ -121,7 +129,7 @@ uintptr_t Dial(const std::string& host, int port, unsigned long long deadline,
             tv.tv_usec = (long)((left % 1000) * 1000);
             if (select(0, nullptr, &ws, &es, &tv) > 0 && FD_ISSET(s, &ws)) ok = true;
         }
-        if (!ok) { closesocket(s); continue; }
+        if (!ok) { AbandonConnect(s); continue; }
         nb = 0;
         ioctlsocket(s, FIONBIO, &nb);
         DWORD ms = 10000;

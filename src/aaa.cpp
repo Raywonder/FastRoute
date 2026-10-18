@@ -6,6 +6,8 @@
 #include <windows.h>
 #include <winhttp.h>
 #include <stdio.h>
+#include <string>
+#include <vector>
 
 namespace aaa {
 
@@ -20,10 +22,20 @@ std::wstring LoadToken()
 {
     FILE* f = nullptr;
     if (_wfopen_s(&f, TokenPath().c_str(), L"rb") != 0 || !f) return std::wstring();
+    // The whole file, however long. A DPAPI blob is the token plus a few
+    // hundred bytes of its own, base64'd, so a fixed buffer truncates a long
+    // bearer token; the truncated blob then fails to decrypt and the only
+    // symptom the user ever sees is "not signed in", with no reason given.
+    std::string raw;
     char buf[4096];
-    size_t n = fread(buf, 1, sizeof(buf), f);
+    for (;;)
+    {
+        const size_t n = fread(buf, 1, sizeof(buf), f);
+        if (n) raw.append(buf, n);
+        if (n < sizeof(buf)) break;
+    }
     fclose(f);
-    std::wstring stored(buf, buf + n);
+    std::wstring stored(raw.begin(), raw.end());
     return UnprotectText(stored);
 }
 
@@ -201,7 +213,30 @@ PollResult PollSignIn(const std::wstring& pollToken, std::wstring* err)
 
 bool SignedIn() { return !LoadToken().empty(); }
 
-void SignOut() { DeleteFileW(TokenPath().c_str()); }
+void SignOut()
+{
+    // Overwrite before deleting. Deleting alone leaves the blob in the free
+    // space, where it is still readable and still decryptable by this same
+    // Windows account - so "sign out" would not actually revoke anything on a
+    // machine somebody else uses next.
+    const std::wstring path = TokenPath();
+    FILE* f = nullptr;
+    if (_wfopen_s(&f, path.c_str(), L"r+b") == 0 && f)
+    {
+        if (fseek(f, 0, SEEK_END) == 0)
+        {
+            const long n = ftell(f);
+            if (n > 0 && fseek(f, 0, SEEK_SET) == 0)
+            {
+                const std::vector<char> zero((size_t)n, 0);
+                fwrite(zero.data(), 1, zero.size(), f);
+                fflush(f);
+            }
+        }
+        fclose(f);
+    }
+    DeleteFileW(path.c_str());
+}
 
 std::wstring WhoAmI(std::wstring* err)
 {

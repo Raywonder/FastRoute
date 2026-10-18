@@ -82,6 +82,20 @@ public:
     bool Start(const Block& b, int rate, std::wstring* err) override
     {
         Stop();
+        // The saved key is encrypted for the Windows account that typed it. On
+        // another account or another machine it cannot be read, and streaming
+        // with nothing in its place would either fail at the server or, worse,
+        // go out unauthenticated. Say so instead. The key on disk is untouched,
+        // so the account that owns it still works.
+        if (b.outKey.empty() && b.outKeyUnreadable)
+        {
+            if (err) *err = L"The key saved for this block was encrypted for a "
+                            L"different Windows account, so it cannot be read "
+                            L"here. Open the block's settings and type it again. "
+                            L"The saved key has not been changed, so it still "
+                            L"works on the account that saved it.";
+            return false;
+        }
         m_server = b.outServer;
         m_format = b.outFormat;
         if (m_server == OS_RTMP)
@@ -284,10 +298,17 @@ private:
     {
         rtmp::Publisher pub;
         if (!pub.Connect(m_rtmp, kConnectTimeoutMs, &err)) return true;
-        Live();
         m_kbpsUsed = enc.Kbps();
-        pub.SendAudioMetadata(kOutRate, kChannels, enc.Kbps());
-        pub.SendAacSequenceHeader(enc.Config().data(), enc.Config().size());
+        // Not live until the server has both headers. Saying "is live" first
+        // and only finding out at the first frame send means a connection lost
+        // in this window is announced, out loud, as a stream that is working.
+        if (!pub.SendAudioMetadata(kOutRate, kChannels, enc.Kbps()) ||
+            !pub.SendAacSequenceHeader(enc.Config().data(), enc.Config().size()))
+        {
+            err = L"The connection closed before the stream could start.";
+            return true;
+        }
+        Live();
 
         std::vector<float> chunk, at48;
         std::vector<int16_t> pcm;

@@ -3,6 +3,7 @@
 #include <windows.h>
 
 #include "rtmp.h"
+#include "netdial.h"
 
 #include <string.h>
 
@@ -686,8 +687,11 @@ bool Publisher::Connect(const Target& t, int timeoutMs, std::wstring* err)
         return false;
     }
 
+    int addrsLeft = 0;
+    for (addrinfo* a = res; a; a = a->ai_next) ++addrsLeft;
+
     std::wstring lastErr;
-    for (addrinfo* a = res; a; a = a->ai_next)
+    for (addrinfo* a = res; a; a = a->ai_next, --addrsLeft)
     {
         SOCKET s = socket(a->ai_family, a->ai_socktype, a->ai_protocol);
         if (s == INVALID_SOCKET) continue;
@@ -702,6 +706,15 @@ bool Publisher::Connect(const Target& t, int timeoutMs, std::wstring* err)
         {
             unsigned long long now = GetTickCount64();
             unsigned long long left = now < deadline ? deadline - now : 0;
+            // While there are other addresses to try, this one gets a slice of
+            // the budget, not all of it. The name can answer on one family and
+            // swallow the other - an address reached through a userspace proxy
+            // such as Tailscale is the case seen - and spending the whole
+            // timeout on that one leaves nothing for the address that works:
+            // every later attempt then gets a zero wait and fails instantly,
+            // so the user is told the server cannot be reached when it can.
+            // The last address left keeps whatever time remains.
+            if (addrsLeft > 1 && left > kAddressTryMs) left = kAddressTryMs;
             fd_set ws, es;
             FD_ZERO(&ws); FD_SET(s, &ws);
             FD_ZERO(&es); FD_SET(s, &es);
@@ -714,7 +727,7 @@ bool Publisher::Connect(const Target& t, int timeoutMs, std::wstring* err)
         {
             lastErr = L"Could not connect to " + Widen(t.host) + L" on port " +
                       Widen(port) + L".";
-            closesocket(s);
+            AbandonConnect(s);
             continue;
         }
         nb = 0;
