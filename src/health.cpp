@@ -512,8 +512,10 @@ std::wstring TakeInstallerError()
 {
     const std::wstring path = Health::InstallerErrorPath();
     FILE* f = nullptr;
-    // The script writes it with whatever cmd's code page is, so plain text
-    // first and UTF-8 only if that is what it turns out to be.
+    // Plain text, not UTF-8: cmd's echo writes in whatever code page the
+    // console has, and the two sentences the script can write are ASCII, where
+    // every code page agrees. Reading it as UTF-8 would be the guess that goes
+    // wrong on a machine whose console is not.
     if (_wfopen_s(&f, path.c_str(), L"rt") != 0 || !f) return std::wstring();
     std::wstring text;
     wchar_t buf[1024];
