@@ -51,6 +51,19 @@ IDI_APPMAIN ICON "fastroute.ico"
 
 /////////////////////////////////////////////////////////////////////////////
 // Menu bars
+//
+// Access keys here have to be unique against the main window's own controls as
+// well as against each other, because in a dialog with a menu the controls are
+// asked first. Three things claimed Alt+H - the Scheduled events list, the
+// Schedule menu and the Help menu - so Help could not be opened by its own key
+// at all, which is how this was noticed: Help gained an item somebody would
+// want to reach that way. Alt+S was claimed twice the same way, by the
+// Sessions list and the Session menu.
+//
+// So the menu bar is F, N, D, H and the controls are S, V and R, which is nine
+// windows between seven letters with none shared. The labels themselves are
+// unchanged - only which letter is underlined. Other windows have their own
+// menus and their own controls and were not looked at here.
 
 IDR_MAIN_MENU MENU
 BEGIN
@@ -63,7 +76,7 @@ BEGIN
         MENUITEM SEPARATOR
         MENUITEM "E&xit",                        IDM_APP_EXIT
     END
-    POPUP "&Session"
+    POPUP "Sessio&n"
     BEGIN
         MENUITEM "&Open\tEnter",                 IDM_SESSION_OPEN
         MENUITEM "&Run\tCtrl+R",                 IDM_SESSION_RUN
@@ -76,7 +89,7 @@ BEGIN
         MENUITEM "Re&name...\tF2",               IDM_SESSION_RENAME
         MENUITEM "&Delete\tDel",                 IDM_SESSION_DELETE
     END
-    POPUP "Sc&hedule"
+    POPUP "Sche&dule"
     BEGIN
         MENUITEM "&New Event...\tCtrl+Shift+N", IDM_SCHED_NEW
         MENUITEM "&Edit Event...\tEnter",      IDM_SCHED_EDIT
@@ -226,7 +239,7 @@ BEGIN
     CONTROL         "", IDC_SESSION_LIST, WC_LISTVIEW,
                     LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_BORDER |
                     WS_TABSTOP | WS_GROUP, 13, 38, 394, 164
-    LTEXT           "Sc&heduled events:", IDC_SCHED_LABEL, 13, 26, 300, 9
+    LTEXT           "Scheduled e&vents:", IDC_SCHED_LABEL, 13, 26, 300, 9
     CONTROL         "", IDC_SCHED_LIST, WC_LISTVIEW,
                     LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_BORDER |
                     WS_TABSTOP | WS_GROUP, 13, 38, 394, 164
