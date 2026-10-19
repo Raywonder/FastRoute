@@ -1140,26 +1140,39 @@ bool CanReport()
 
 std::wstring DiagnosticsText()
 {
-    std::wstring out = L"FastRoute " + RunningVersion();
+    std::wstring head = L"FastRoute " + RunningVersion();
     const std::wstring commit = RunningCommit();
-    if (!commit.empty()) out += L" (" + Clip(commit, 12) + L")";
-    out += L"\r\n" + WindowsVersionText() + L", " + ArchName();
-    out += L"\r\nUpdates from " + FeedName();
-    out += g_enabled.load() ? L"\r\nAutomatic reports are on."
-                            : L"\r\nAutomatic reports are off.";
-    out += L"\r\n\r\n";
+    if (!commit.empty()) head += L" (" + Clip(commit, 12) + L")";
+    head += L"\r\n" + WindowsVersionText() + L", " + ArchName();
+    head += L"\r\nUpdates from " + FeedName();
+    head += g_enabled.load() ? L"\r\nAutomatic reports are on."
+                             : L"\r\nAutomatic reports are off.";
+    head += L"\r\n\r\n";
 
+    std::wstring log;
     const std::vector<LogEntry> entries = ErrorLogEntries();
     if (entries.empty())
-    {
-        out += L"No errors have been reported since FastRoute started.";
-    }
+        log = L"No errors have been reported since FastRoute started.";
     else
-    {
         for (const LogEntry& e : entries)
-            out += e.when + L"  " + e.text + L"\r\n";
-    }
-    return Scrub(out);
+            log += e.when + L"  " + e.text + L"\r\n";
+
+    // The window shows this and sends this, and the two have to be the same
+    // thing or the window is lying about what left the machine. An edit
+    // control made from a dialog template holds 32,767 characters and silently
+    // drops the rest, so the cap is here, below that, rather than being
+    // discovered at the far end of a report somebody thought they had read.
+    //
+    // What goes is the beginning of the log, not the end: two hundred entries
+    // of an error repeating is the shape of the problem, and the last of them
+    // is the one somebody has just pressed this button about.
+    const size_t kMaxLog = 24000;
+    if (log.size() > kMaxLog)
+        log = L"[ The start of the error log is not included: it is longer "
+              L"than this report can hold. ]\r\n\r\n" +
+              log.substr(log.size() - kMaxLog);
+
+    return Scrub(head + log);
 }
 
 bool SubmitDiagnostics(const std::wstring& report, const std::wstring& note,

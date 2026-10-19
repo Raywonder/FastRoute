@@ -4080,6 +4080,11 @@ static INT_PTR CALLBACK DiagnosticsDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM
         // behind one nobody is waiting for either.
         g_diagSending.store(false);
 
+        // DiagnosticsText keeps itself under the 32,767 an edit made from a
+        // dialog template holds, but saying so here as well costs one message
+        // and means the window cannot quietly show less than it sends even if
+        // that cap is ever raised on the other side.
+        SendDlgItemMessageW(dlg, IDC_DIAG_TEXT, EM_SETLIMITTEXT, 0, 0);
         SetDlgItemTextW(dlg, IDC_DIAG_TEXT, job.report.c_str());
         SetDlgItemTextW(dlg, IDC_DIAG_STATUS, L"");
         EnableWindow(GetDlgItem(dlg, IDC_DIAG_COPYREF), FALSE);
