@@ -33,6 +33,19 @@ void LogError(const std::wstring& msg);
 std::vector<LogEntry> ErrorLogEntries();
 void ClearErrorLog();
 void InfoBox(HWND owner, const std::wstring& msg);
+
+// LogError and ErrorBox again, for the few failures that are FastRoute's own
+// fault rather than something about the machine it is running on. These also
+// tell our server, so that we find out about them without having to be told.
+//
+// Most of what reaches LogError is not that: a session whose capture target is
+// not open yet, an interface that was unplugged, a stream host that is down, a
+// hotkey another program already holds. Sending all of it would bury the few
+// that are ours under hundreds that are not, so the judgement is made here, at
+// the failure, by the code that knows what its own failing means. `where` is a
+// short word naming the place, for grouping on our side. See health.h.
+void LogFault(const wchar_t* where, const std::wstring& msg);
+void ErrorBoxFault(HWND owner, const wchar_t* where, const std::wstring& msg);
 std::wstring Trim(const std::wstring& s);
 bool IEquals(const std::wstring& a, const std::wstring& b);
 

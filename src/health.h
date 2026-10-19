@@ -2,13 +2,15 @@
 #include <string>
 
 // ---------------------------------------------------------------------------
-// Telling our server what happened to an update
+// Telling our server what happened
 //
 // Every one of our applications with an updater reports what its updates did -
 // installed, failed, or did not reopen afterwards - so that a broken update is
 // noticed by us rather than by the person using it. Without this a failed
 // update is a line in a log file on somebody else's machine, which is to say
 // invisible, and we also have no idea how many copies are running which build.
+// Alongside that: a crash, the handful of errors that mean FastRoute itself is
+// broken, and - only ever when the person presses the button - the error log.
 //
 // What goes out is a random install number, the version, the Windows version,
 // which release feed this copy follows, and a short description of what went
@@ -24,11 +26,25 @@
 namespace Health
 {
 
-// Reads the state file, works out what the last update did and reports it, and
-// sends one "started" a day so that builds in use can be counted. Call once,
-// early, after the settings have been loaded - the privacy setting is read
-// from them.
+// Reads the state file, works out what the last update did and reports it,
+// reports a crash the last run left behind, and sends one "started" a day so
+// that builds in use can be counted. Call once, early, after the settings have
+// been loaded - the privacy setting is read from them.
 void OnStartup();
+
+// Arms the last-chance exception filter, so that a crash is reported rather
+// than being something only the person it happened to ever knows about. Call
+// once, after OnStartup, which is what clears away the previous run's report
+// before this run can write one over it. With reporting off nothing is armed.
+//
+// The filter itself does as little as it is possible to do: the process is
+// already broken, and a handler that allocates, takes a lock, starts a thread
+// or waits on the network turns a crash - which Windows deals with in a second
+// - into a hang, which it does not. So it writes one short line to a file of
+// its own with no help from the heap, the CRT or any lock, and then hands the
+// exception on untouched. The next run reads that line, turns it into a proper
+// report and deletes it. Windows itself sees exactly what it sees today.
+void InstallCrashHandler();
 
 // The person's choice, from Settings. Set whenever the settings change, and
 // before OnStartup: with reporting off nothing is sent, nothing is queued and
@@ -72,5 +88,46 @@ std::wstring FeedName();
 // and report on the next run. The script runs after this process has gone, so
 // a message box from it would have nobody to belong to.
 std::wstring InstallerErrorPath();
+
+// --- the errors that are ours ---------------------------------------------
+
+// One error, said to be FastRoute's own fault. Reached through LogFault and
+// ErrorBoxFault in util.h rather than called directly, so that the judgement
+// is made where the failure is, by whoever knows what it means.
+//
+// Which errors those are is the whole question, and the answer is: very few of
+// them. FastRoute's error log fills up mostly with the machine around it - a
+// session set to run at startup whose capture target is not open yet, an
+// Icecast server that is down, a hotkey another program already holds, a USB
+// interface that was unplugged, a folder on a drive that is not in the slot.
+// Every one of those is worth telling the person about and none of them is a
+// bug, so reporting the log wholesale would bury the few that are ours under
+// hundreds that are not, and would do it loudest for whoever has the most
+// trouble. `where` is a short word naming the place, for grouping.
+void ReportError(const wchar_t* where, const std::wstring& error);
+
+// --- the error log, when the person sends it ------------------------------
+
+// True when there is a collector to talk to: a build made without a key has
+// none, so Help > Send Diagnostic Logs is greyed rather than offering
+// something that cannot work.
+bool CanReport();
+
+// The report, as text: the error log with the user folder and any sign-in
+// details taken out of it, under a few lines saying which build and which
+// Windows this is. The dialog shows this and sends this same string back to
+// SubmitDiagnostics, so that what the person read is what left the machine.
+std::wstring DiagnosticsText();
+
+// Posts that report and whatever the person typed about it, and gives back the
+// reference the server answers with so they can quote it to us. Blocks for as
+// long as the request takes, so call it off the message thread.
+//
+// This one ignores the Settings checkbox, which governs what FastRoute sends
+// by itself. Nothing here happens unless the person presses the button, and
+// somebody who has turned the automatic reports off and then chooses to send
+// us a log means to send us a log.
+bool SubmitDiagnostics(const std::wstring& report, const std::wstring& note,
+                       std::wstring* reference, std::wstring* error);
 
 }  // namespace Health

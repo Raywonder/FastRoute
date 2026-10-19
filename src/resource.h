@@ -38,6 +38,7 @@
 #define IDD_NET_OPUS             130
 #define IDD_BLOCK_STREAMOUT      132
 #define IDD_AAA_SIGNIN           133
+#define IDD_DIAGNOSTICS          134
 
 // Menus
 #define IDR_MAIN_MENU            200
@@ -389,6 +390,13 @@
 #define IDC_AAA_REFRESH         1434
 #define IDC_AAA_OPEN            1435
 
+// Send diagnostic logs
+#define IDC_DIAG_NOTE           1440
+#define IDC_DIAG_TEXT           1441
+#define IDC_DIAG_STATUS         1442
+#define IDC_DIAG_SEND           1443
+#define IDC_DIAG_COPYREF        1444
+
 // Ten band EQ: one slider and one readout per band, contiguous so the band
 // index is just the control id minus the base.
 #define IDC_EQ_SLIDER_BASE      1100
@@ -407,6 +415,7 @@
 #define IDM_SESSION_TOGGLE      40009
 #define IDM_SESSION_AUTORUN     40010
 #define IDM_HELP_ERRORS         40011
+#define IDM_HELP_DIAGNOSTICS    40037
 #define IDM_APP_HIDE            40012
 #define IDM_APP_SETTINGS        40013
 #define IDM_TRAY_SHOW           40014

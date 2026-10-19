@@ -89,9 +89,22 @@ void ApplyLiveEditQuiet(int sessionId)
     bool intact = true;
     if (it->second->ApplySession(*s, &err, &intact)) return;
 
-    if (!intact) StopSession(sessionId);
-    LogError(err.empty() ? L"A change could not be applied to a running session."
-                         : err);
+    const std::wstring msg =
+        err.empty() ? L"A change could not be applied to a running session." : err;
+
+    // A rebuild that failed and left the graph in pieces is ours: a session
+    // that was playing a moment ago, on the same devices, has been stopped by
+    // an edit, and an edit must not be able to do that. One that failed with
+    // the graph intact is usually the setting itself - a device unplugged
+    // since, a plugin that will not take the value - so it stays in the log
+    // where the person can see it, and no further than that.
+    if (!intact)
+    {
+        StopSession(sessionId);
+        LogFault(L"live edit", msg);
+        return;
+    }
+    LogError(msg);
 }
 
 bool PerformBlockAction(int sessionId, int blockIndex, int action)
@@ -112,9 +125,16 @@ bool ApplyLiveEdit(HWND owner, int sessionId)
     if (it->second->ApplySession(*s, &err, &intact)) return true;
 
     // If the rebuild failed before touching anything, the session is still
-    // playing the previous graph; otherwise it is in no fit state to continue.
-    if (!intact) StopSession(sessionId);
-    ErrorBox(owner, err.empty() ? L"The change could not be applied." : err);
+    // playing the previous graph; otherwise it is in no fit state to continue,
+    // and that - a running session an edit took down - is ours to hear about.
+    const std::wstring msg = err.empty() ? L"The change could not be applied." : err;
+    if (!intact)
+    {
+        StopSession(sessionId);
+        ErrorBoxFault(owner, L"live edit", msg);
+        return false;
+    }
+    ErrorBox(owner, msg);
     return false;
 }
 
@@ -155,6 +175,9 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, LPWSTR, int)
     HRESULT hrCom = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     if (FAILED(hrCom))
     {
+        // Nothing to report with: the reporting path has not been switched on
+        // yet, and it needs COM itself to make an install number. A box is all
+        // there is, and FastRoute cannot run without COM anyway.
         ErrorBox(nullptr, L"COM could not be initialised (" + HrText(hrCom) + L").");
         return 1;
     }
@@ -172,12 +195,19 @@ int WINAPI wWinMain(HINSTANCE inst, HINSTANCE, LPWSTR, int)
     // sends nothing, queues nothing and writes nothing down.
     Health::SetEnabled(g_store.settings.sendHealth);
     Health::OnStartup();
+    // After OnStartup, which is what reads away the note the last run's filter
+    // left: armed before that, a crash here could write over the report of the
+    // crash that has not been sent yet.
+    Health::InstallCrashHandler();
 
     g_mainDlg = CreateDialogParamW(inst, MAKEINTRESOURCEW(IDD_MAIN), nullptr,
                                    MainDlgProc, 0);
     if (!g_mainDlg)
     {
-        ErrorBox(nullptr, L"The main window could not be created.");
+        // Ours, with no room for doubt: the dialog is in our own resources and
+        // nothing about this machine has a say in whether it can be made.
+        ErrorBoxFault(nullptr, L"startup", L"The main window could not be created.");
+        Health::Shutdown();
         CoUninitialize();
         return 1;
     }

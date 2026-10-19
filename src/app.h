@@ -128,6 +128,9 @@ bool EditBlockActions(HWND parent, Block& b);
 bool EditScheduleEvent(HWND parent, ScheduleEvent& e);
 void ShowAboutDialog(HWND parent);
 void ShowErrorLogDialog(HWND parent);
+// Help > Send Diagnostic Logs: the error log, on its way to us, with the
+// reference shown so the person can quote it.
+void ShowDiagnosticsDialog(HWND parent);
 void ShowSettingsDialog(HWND parent);
 
 // ---- small helpers --------------------------------------------------------

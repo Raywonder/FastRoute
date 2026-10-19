@@ -1123,6 +1123,91 @@ or copy the files it writes one line to `app_health_installer_error.txt` and
 starts FastRoute again anyway; the next run reports that line and deletes it. A
 copy that comes back and says what went wrong beats one that never comes back.
 
+### A crash
+
+FastRoute installs a last-chance exception filter, so a crash is something we
+find out about rather than something only the person it happened to ever knows.
+
+The filter does as little as it is possible to do, because by the time it runs
+the process is already broken: the heap may be what broke it, the lock that
+guards the state file may be held by the thread that just died, a thread
+started there may never be scheduled and a network request may sit for its
+whole timeout. A handler that allocates, locks, waits or sends turns a crash
+Windows deals with in a second into a window that hangs instead - which is a
+worse bug than the one it was reporting.
+
+So everything it needs is worked out at startup and left in plain variables: a
+path, the address our own image is loaded at, and the version as ASCII. The
+filter formats the exception code and the faulting address with no help from
+the heap or the C library, writes one line to `app_health_crash.txt` with
+`CreateFile` and `WriteFile`, and hands the exception straight on. Windows sees
+exactly what it sees today - the same error dialog, the same debugger, the same
+exit. The next run reads that line, turns it into a sentence where sentences
+are safe to make, and reports it like anything else.
+
+The address is reported as an offset into `FastRoute.exe`, not as an absolute
+address, because Windows loads the image somewhere different on every run and
+only the offset can be read against a build's map file.
+
+### The errors that are ours
+
+Routing the error log wholesale to the collector would be the wrong thing, and
+not by a little. Most of what lands there is the machine FastRoute is running
+on, not FastRoute: a session set to run at startup whose capture target is not
+open yet, an interface that was unplugged, an Icecast server that is down, a
+hotkey another program already holds, a folder on a drive that is not in the
+slot. Every one of those is worth telling the person about and none of them is
+a bug. Sending them all would bury the few that are ours under hundreds that
+are not, and would do it loudest for whoever is having the most trouble.
+
+So the judgement is made at the failure, by the code that knows what its own
+failing means. `LogFault` and `ErrorBoxFault` in `src/util.h` do what
+`LogError` and `ErrorBox` do and tell our server as well, and they are used in
+four places:
+
+- the main window could not be created - the dialog is in our own resources,
+  and nothing about the machine has a say in whether it can be made;
+- a scheduled event came due pointing at a session that has been deleted -
+  deleting a session is meant to take its events with it, so an event pointing
+  at nothing means that did not happen, and nothing the person did could have
+  left one behind;
+- a live edit failed **and left the graph in pieces**, in either of the two
+  paths that apply one - a session that was playing a moment ago, on the same
+  devices, has been stopped by an edit, and an edit must not be able to do
+  that. The same failure with the graph intact is usually the setting itself,
+  and stays in the log and no further.
+
+One run reports at most five of these, and never the same text twice. A fault
+that repeats - a scheduled event firing every minute - says no more the fourth
+time than the first, and a run that spent its whole budget on one repeating
+error would have none left for the next one, which might be the interesting
+one. The rest are all still in the error log, which the person can send.
+
+### Help > Send Diagnostic Logs
+
+When something is wrong that no single report explains, **Help > Send
+Diagnostic Logs** hands us the error log and whatever the person wants to say
+about it, and shows them the reference our server gives back so they can quote
+it. Only ever when they press the button, and whatever the Settings checkbox
+says: that checkbox governs what FastRoute sends by itself, and somebody who
+has turned it off and then chooses to send us a log means to send us a log.
+
+The report is in the window, read only, rather than described in a sentence and
+sent out of sight. "The same thing you can see under Help, Error Log, with some
+of it taken out" is not something anybody should have to take on trust about
+their own machine, and showing it is no harder.
+
+What is taken out: the user folder name, and the sign-in in any URL. A Stream
+Out block's address can be written as `http://source:password@host:8000/mount`,
+and that password is the person's - their broadcast server, not ours. The
+collector's own redaction looks for the word "password" beside a value and
+would not catch that one, because there is no word in it, only a colon. So it
+goes before anything leaves the machine.
+
+A copy whose automatic reports are off has never been given an install number,
+and pressing this button does not give it one: it gets a number for that one
+message which is written down nowhere and never used again.
+
 ## ASIO
 
 An **ASIO Input** block and an **ASIO Output** block, for an interface with an
