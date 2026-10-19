@@ -1111,8 +1111,7 @@ STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMEN
 CAPTION "Send Diagnostic Logs"
 FONT 9, "Segoe UI", 400, 0, 0x1
 BEGIN
-    LTEXT           "This sends the report below to us so we can see what went "
-                    "wrong. Nothing is sent until you press Send.",
+    LTEXT           "This sends the report below to us, so we can see what went wrong. Nothing is sent until you press Send.",
                     -1, 7, 7, 366, 18
     LTEXT           "&What were you doing when it went wrong? (optional)",
                     -1, 7, 29, 366, 9
