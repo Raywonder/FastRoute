@@ -1,4 +1,5 @@
 #include "util.h"
+#include "health.h"
 #include <objbase.h>
 #include <shlobj.h>
 #include <stdarg.h>
@@ -135,6 +136,22 @@ void ClearErrorLog()
 void ErrorBox(HWND owner, const std::wstring& msg)
 {
     LogError(msg);
+    MessageBoxW(owner, msg.c_str(), L"FastRoute", MB_OK | MB_ICONERROR);
+}
+
+// The same, and our server is told as well. Nothing the person sees changes:
+// the entry in the log and the box in front of them are the ones they would
+// have had anyway, so a reporting path that is off, keyless or broken makes no
+// difference to what happens here.
+void LogFault(const wchar_t* where, const std::wstring& msg)
+{
+    LogError(msg);
+    Health::ReportError(where, msg);
+}
+
+void ErrorBoxFault(HWND owner, const wchar_t* where, const std::wstring& msg)
+{
+    LogFault(where, msg);
     MessageBoxW(owner, msg.c_str(), L"FastRoute", MB_OK | MB_ICONERROR);
 }
 

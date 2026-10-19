@@ -86,6 +86,7 @@ BEGIN
     POPUP "&Help"
     BEGIN
         MENUITEM "&Error Log...",                IDM_HELP_ERRORS
+        MENUITEM "Send &Diagnostic Logs...",     IDM_HELP_DIAGNOSTICS
         MENUITEM "Check for &Updates...",        IDM_HELP_UPDATE
         MENUITEM "&About FastRoute",             IDM_HELP_ABOUT
     END
@@ -1091,6 +1092,41 @@ BEGIN
     PUSHBUTTON      "&Copy",  IDC_LOG_COPY,  7, 193, 60, 16
     PUSHBUTTON      "C&lear", IDC_LOG_CLEAR, 71, 193, 60, 16
     DEFPUSHBUTTON   "Close",  IDOK,         323, 193, 50, 16
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// Send diagnostic logs
+//
+// The report itself is in the window, read only, rather than described in a
+// sentence and sent out of sight. "The same thing you can see under Help,
+// Error Log, with some of it taken out" is not something anybody should have
+// to take on trust about their own machine, and it is no harder to show it.
+//
+// The status line is a label, not a read-only edit: a live region on an edit
+// is announced by the control's name and not by what it now says, which is
+// silence where it matters most.
+
+IDD_DIAGNOSTICS DIALOGEX 0, 0, 380, 284
+STYLE DS_SETFONT | DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Send Diagnostic Logs"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT           "This sends the report below to us so we can see what went "
+                    "wrong. Nothing is sent until you press Send.",
+                    -1, 7, 7, 366, 18
+    LTEXT           "&What were you doing when it went wrong? (optional)",
+                    -1, 7, 29, 366, 9
+    EDITTEXT        IDC_DIAG_NOTE, 7, 41, 366, 40,
+                    ES_MULTILINE | ES_AUTOVSCROLL | ES_WANTRETURN |
+                    WS_VSCROLL | WS_TABSTOP | WS_BORDER
+    LTEXT           "&Report that will be sent:", -1, 7, 87, 366, 9
+    EDITTEXT        IDC_DIAG_TEXT, 7, 99, 366, 134,
+                    ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL | ES_WANTRETURN |
+                    WS_VSCROLL | WS_TABSTOP | WS_BORDER
+    LTEXT           "", IDC_DIAG_STATUS, 7, 239, 366, 18
+    DEFPUSHBUTTON   "&Send", IDC_DIAG_SEND, 162, 261, 60, 16
+    PUSHBUTTON      "&Copy Reference", IDC_DIAG_COPYREF, 226, 261, 90, 16
+    PUSHBUTTON      "Close", IDCANCEL, 320, 261, 53, 16
 END
 
 /////////////////////////////////////////////////////////////////////////////

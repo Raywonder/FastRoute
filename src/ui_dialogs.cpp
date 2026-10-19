@@ -4010,6 +4010,182 @@ void ShowErrorLogDialog(HWND parent)
 }
 
 // ---------------------------------------------------------------------------
+// Send diagnostic logs
+//
+// Help > Error Log is where somebody goes to read what went wrong. This is
+// where they hand the same thing to us, with a line about what they were
+// doing, and get back a reference they can quote - which is what turns "it
+// keeps stopping" into a report we can look up.
+//
+// The one thing worth being careful about is what gets announced. Every press
+// says exactly one thing, through the status label, and nothing moves the
+// focus or disables the control under it. Both of those are how a window like
+// this usually goes wrong: the button that was pressed is greyed out, so focus
+// falls back to the dialog and the reader reads the title instead of the
+// answer; or the answer is written somewhere at the same moment as the focused
+// control changes, and the two race, and the one that loses is the one worth
+// hearing. So Send stays pressable - pressed again it says what already
+// happened - and nothing but the label ever speaks.
+//
+// The status is a label and not a read-only edit on purpose: a live region on
+// an edit control is announced by the control's name rather than by what it
+// now says, which is silence exactly where it matters.
+// ---------------------------------------------------------------------------
+
+// The sending thread's way of handing its answer back to the message thread.
+// Controls belong to that thread, and nothing else may touch them.
+static const UINT WM_DIAG_DONE = WM_APP + 71;
+
+namespace {
+
+struct DiagJob
+{
+    std::wstring report;
+    std::wstring note;
+    std::wstring reference;
+    std::wstring error;
+    bool ok = false;
+};
+
+// Made once and never destroyed, so that a send still running when its window
+// has been closed has somewhere valid to write. The dialog is modal, so only
+// one send can ever be started at a time.
+DiagJob& Diag()
+{
+    static DiagJob* j = new DiagJob();
+    return *j;
+}
+
+std::atomic<bool> g_diagSending{ false };
+
+void DiagSay(HWND dlg, const std::wstring& text)
+{
+    Announce(GetDlgItem(dlg, IDC_DIAG_STATUS), text);
+}
+
+}  // namespace
+
+static INT_PTR CALLBACK DiagnosticsDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
+{
+    (void)lp;
+    switch (msg)
+    {
+    case WM_INITDIALOG:
+    {
+        DiagJob& job = Diag();
+        job = DiagJob();
+        job.report = Health::DiagnosticsText();
+        // A send the last window walked away from leaves this set. The thread
+        // clears it when it finishes, but a new window must not be stuck
+        // behind one nobody is waiting for either.
+        g_diagSending.store(false);
+
+        SetDlgItemTextW(dlg, IDC_DIAG_TEXT, job.report.c_str());
+        SetDlgItemTextW(dlg, IDC_DIAG_STATUS, L"");
+        EnableWindow(GetDlgItem(dlg, IDC_DIAG_COPYREF), FALSE);
+        SetFocus(GetDlgItem(dlg, IDC_DIAG_NOTE));
+        return FALSE;   // focus set explicitly
+    }
+
+    case WM_DIAG_DONE:
+    {
+        DiagJob& job = Diag();
+        const std::wstring said = !job.ok ? job.error
+            : job.reference.empty()
+                ? L"Sent. Our server gave no reference back, but the report "
+                  L"is with us."
+                : L"Sent. Your reference is " + job.reference +
+                  L". Quote it if you write to us about this.";
+        SetDlgItemTextW(dlg, IDC_DIAG_STATUS, said.c_str());
+        if (job.ok && !job.reference.empty())
+            EnableWindow(GetDlgItem(dlg, IDC_DIAG_COPYREF), TRUE);
+        DiagSay(dlg, said);
+        return TRUE;
+    }
+
+    case WM_COMMAND:
+        switch (LOWORD(wp))
+        {
+        case IDC_DIAG_SEND:
+        {
+            DiagJob& job = Diag();
+            if (g_diagSending.load())
+            {
+                DiagSay(dlg, L"Still sending. One moment.");
+                return TRUE;
+            }
+            if (job.ok)
+            {
+                // Pressed again after it worked. Saying so beats sending the
+                // same log twice and spending the day's allowance on it.
+                DiagSay(dlg, job.reference.empty()
+                    ? L"This report has already been sent."
+                    : L"This report has already been sent, as " +
+                      job.reference + L".");
+                return TRUE;
+            }
+
+            const int n = GetWindowTextLengthW(GetDlgItem(dlg, IDC_DIAG_NOTE));
+            job.note.assign((size_t)n + 1, L'\0');
+            if (n > 0) GetDlgItemTextW(dlg, IDC_DIAG_NOTE, &job.note[0], n + 1);
+            job.note.resize((size_t)n);
+            job.error.clear();
+            job.reference.clear();
+
+            g_diagSending.store(true);
+            DiagSay(dlg, L"Sending the report to our server.");
+            std::thread([dlg]
+            {
+                DiagJob& j = Diag();
+                std::wstring reference, error;
+                const bool ok = Health::SubmitDiagnostics(j.report, j.note,
+                                                          &reference, &error);
+                j.reference = reference;
+                j.error     = error;
+                j.ok        = ok;
+                // Posted before the flag is cleared, so a press that lands in
+                // between is told to wait rather than starting a second send
+                // while this answer is still on its way to the window.
+                PostMessageW(dlg, WM_DIAG_DONE, 0, 0);
+                g_diagSending.store(false);
+            }).detach();
+            return TRUE;
+        }
+
+        case IDC_DIAG_COPYREF:
+            CopyToClipboard(dlg, Diag().reference);
+            DiagSay(dlg, L"Reference copied.");
+            return TRUE;
+
+        case IDOK:
+            // Nothing should reach this: Send is the default button, and both
+            // edits keep Enter for themselves. Swallowing it anyway is better
+            // than closing the window by accident on somebody who was typing.
+            return TRUE;
+
+        case IDCANCEL:
+            EndDialog(dlg, IDOK);
+            return TRUE;
+        }
+        break;
+    }
+    return FALSE;
+}
+
+void ShowDiagnosticsDialog(HWND parent)
+{
+    if (!Health::CanReport())
+    {
+        InfoBox(parent, L"This build of FastRoute has no server to send logs "
+                        L"to. Help, Error Log shows the same report, and its "
+                        L"Copy button puts it on the clipboard.");
+        return;
+    }
+    DialogBoxParamW(g_inst, MAKEINTRESOURCEW(IDD_DIAGNOSTICS), parent,
+                    DiagnosticsDlgProc, 0);
+}
+
+// ---------------------------------------------------------------------------
 // Settings
 //
 // The hotkey is four checkboxes and a list rather than the standard hotkey

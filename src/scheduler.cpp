@@ -130,7 +130,13 @@ void SchedulerTick(HWND owner)
         Session* s = g_store.ById(e.sessionId);
         if (!s)
         {
-            LogError(FormatW(L"A scheduled event was due at %02d:%02d but the "
+            // Ours: deleting a session is meant to take its events with it, so
+            // an event pointing at nothing means that did not happen. Nothing
+            // the person did could leave one behind, which is why this one is
+            // reported and the two below - a machine that was asleep, a
+            // capture target that is not open - are not.
+            LogFault(L"schedule",
+                     FormatW(L"A scheduled event was due at %02d:%02d but the "
                              L"session it names has been deleted.", e.hour, e.minute));
             continue;
         }
